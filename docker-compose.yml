@@ -140,7 +140,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4096M
+          memory: 5120M
 
   # --- 5. MySQL ---
   mysql:
