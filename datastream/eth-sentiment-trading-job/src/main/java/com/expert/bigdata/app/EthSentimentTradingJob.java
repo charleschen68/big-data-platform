@@ -90,7 +90,8 @@ public class EthSentimentTradingJob {
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
 
-        DataStream<String> rawStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "SocialStream");
+        DataStream<String> rawStream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "SocialStream")
+                .slotSharingGroup("default");
         rawStream.print("[1-RawStream]");
         /*
          * Undo：风控流处理
@@ -104,20 +105,24 @@ public class EthSentimentTradingJob {
         // 注意：本地 31b 模型难以承受极高并发，将 Async Capacity 从 100 骤降至 2，防止显存 OOM 或 Ollama
         // 并发队列崩溃导致生成截断死机。
         DataStream<String> sentimentStream = AsyncDataStream.orderedWait(
-                rawStream, new EthSentimentOllamaFunction(), 120, TimeUnit.SECONDS, 2);
+                rawStream, new EthSentimentOllamaFunction(), 120, TimeUnit.SECONDS, 2)
+                .slotSharingGroup("heavy-sentimentStream-compute");
         sentimentStream.print("[2-SentimentStream]");
 
         // 阶段 2: 获取 MySQL 历史 K 线特征
         DataStream<String> featureStream = AsyncDataStream.orderedWait(
-                sentimentStream, new EthPriceFeatureAsyncFunction(), 5, TimeUnit.SECONDS, 100);
+                sentimentStream, new EthPriceFeatureAsyncFunction(), 5, TimeUnit.SECONDS, 100)
+                .slotSharingGroup("default");
         featureStream.print("[3-FeatureStream]");
         // 阶段 3: 生成向量 Embedding
         DataStream<String> embeddingStream = AsyncDataStream.orderedWait(
-                featureStream, new EthEmbeddingFunction(), 10, TimeUnit.SECONDS, 50);
+                featureStream, new EthEmbeddingFunction(), 10, TimeUnit.SECONDS, 50)
+                .slotSharingGroup("heavy-embeddingStream-compute");
         embeddingStream.print("[4-EmbeddingStream]");
         // 阶段 4: Milvus 回测决策
         DataStream<String> decisionStream = AsyncDataStream.orderedWait(
-                embeddingStream, new EthBacktestDecisionFunction(), 10, TimeUnit.SECONDS, 50);
+                embeddingStream, new EthBacktestDecisionFunction(), 10, TimeUnit.SECONDS, 50)
+                .slotSharingGroup("heavy-decisionStream-compute");
         decisionStream.print("[5-DecisionStream]");
 
         /*
@@ -139,11 +144,11 @@ public class EthSentimentTradingJob {
                                 .build())
                 .setDeliveryGuarantee(org.apache.flink.connector.base.DeliveryGuarantee.AT_LEAST_ONCE)
                 .build();
-        decisionStream.sinkTo(sink);
+        decisionStream.sinkTo(sink).slotSharingGroup("default");
 
         // 5. 记忆存入 Sink
         // embeddingStream.addSink(new MilvusSink());
-        embeddingStream.addSink(new MilvusSink()).name("MilvusMemorySink");
+        embeddingStream.addSink(new MilvusSink()).name("MilvusMemorySink").slotSharingGroup("default");
 
         env.execute("ETH Real-time Sentiment Quant Engine");
     }

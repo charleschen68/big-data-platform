@@ -98,6 +98,8 @@ services:
         state.backend: hashmap
         state.checkpoints.dir: file:///opt/flink/checkpoints
         state.savepoints.dir: file:///opt/flink/savepoints
+        classloader.resolve-order: child-first
+        env.java.opts.all: -Djava.net.preferIPv4Stack=true -Dnetworkaddress.cache.ttl=60 -Dnetworkaddress.cache.negative.ttl=0
     deploy:
       resources:
         limits:
@@ -131,6 +133,10 @@ services:
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 8
         taskmanager.memory.process.size: 4096m
+        taskmanager.host: flink-taskmanager
+        taskmanager.bind-host: 0.0.0.0
+        classloader.resolve-order: child-first
+        env.java.opts.all: -Djava.net.preferIPv4Stack=true -Dnetworkaddress.cache.ttl=60 -Dnetworkaddress.cache.negative.ttl=0
     deploy:
       resources:
         limits:
