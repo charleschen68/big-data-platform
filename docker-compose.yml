@@ -21,18 +21,14 @@ services:
     # 使用多行字符串语法（>）让结构更清晰
     # 分别启动两个脚本并将其日志输出到对应的文件夹下，最后保持容器运行
     command: >
-      bash -c "
-      python3 /workspace/dataflow/eth_info_dataflow/rss_to_eth_social_stream.py >> /workspace/dataflow/eth_info_dataflow/rss_task.log 2>&1 &
-      python3 /workspace/dataflow/eth_trade_dataflow/market_data_collector.py >> /workspace/dataflow/eth_trade_dataflow/market_task.log 2>&1 &
-      python3 /workspace/dataflow/eth_trade_dataflow/eth_trade_settlement.py >> /workspace/dataflow/eth_trade_dataflow/settlement.log 2>&1 &
-      sleep infinity"
+      bash -c " python3 /workspace/dataflow/eth_info_dataflow/rss_to_eth_social_stream.py >> /workspace/dataflow/eth_info_dataflow/rss_task.log 2>&1 & python3 /workspace/dataflow/eth_trade_dataflow/market_data_collector.py >> /workspace/dataflow/eth_trade_dataflow/market_task.log 2>&1 & python3 /workspace/dataflow/eth_trade_dataflow/eth_trade_settlement.py >> /workspace/dataflow/eth_trade_dataflow/settlement.log 2>&1 & sleep infinity"
     networks:
       - big-data-network
   # --- 1. Apache Kafka (KRaft模式) ---
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
-    restart: always  # <-- 新增：随宿主机启动
+    restart: always
     ports:
       - "9092:9092"
       - "9094:9094"
@@ -53,7 +49,7 @@ services:
       KAFKA_LOG_FLUSH_INTERVAL_MS: 10000
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_HEAP_OPTS: "-Xmx1G -Xms1G"
-      TZ: Asia/Shanghai  # <-- 新增：上海时间
+      TZ: Asia/Shanghai
     deploy:
       resources:
         limits:
@@ -86,7 +82,7 @@ services:
     environment:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
@@ -127,7 +123,7 @@ services:
     environment:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
@@ -140,7 +136,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 5120M
+          memory: 10240M
 
   # --- 5. MySQL ---
   mysql:
@@ -152,7 +148,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: streampark
       MYSQL_DATABASE: streampark
-      TZ: Asia/Shanghai  # <-- 新增：上海时间
+      TZ: Asia/Shanghai # <-- 新增：上海时间
     volumes:
       - ./data/mysql:/var/lib/mysql
     ports:
@@ -178,7 +174,7 @@ services:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - STREAM_PARK_WORKSPACE=/streampark/workspace
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
     depends_on:
       - flink-jobmanager
       - kafka
@@ -192,7 +188,7 @@ services:
       - ./data/streampark_workspace:/streampark/workspace
       - streampark_maven_repo:/root/.m2
       - ./data/flink_checkpoints:/flink_checkpoints
-#    command: tail -f /dev/null
+  #    command: tail -f /dev/null
 
   # --- 7. AI 基础设施 (Milvus) ---
   etcd:
@@ -205,7 +201,7 @@ services:
       - ETCD_AUTO_COMPACTION_RETENTION=1000
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
     volumes:
       - ./data/etcd:/etcd
     command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
@@ -218,7 +214,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      TZ: Asia/Shanghai  # <-- 新增：上海时间
+      TZ: Asia/Shanghai # <-- 新增：上海时间
     ports:
       - "9001:9001"
       - "9000:9000"
@@ -229,7 +225,7 @@ services:
   milvus:
     container_name: milvus-standalone
     image: milvusdb/milvus:v2.4.15
-    command: ["milvus", "run", "standalone"]
+    command: [ "milvus", "run", "standalone" ]
     security_opt:
       - seccomp:unconfined
     networks:
@@ -238,7 +234,7 @@ services:
       ETCD_ENDPOINTS: milvus-etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
       COMMON_STORAGETYPE: minio
-      TZ: Asia/Shanghai  # <-- 原本已有，保持不变
+      TZ: Asia/Shanghai # <-- 原本已有，保持不变
     volumes:
       - ./data/milvus:/var/lib/milvus
       - ./data/logs/milvus:/milvus/logs
@@ -261,7 +257,7 @@ services:
       - big-data-network
     environment:
       MILVUS_URL: milvus-standalone:19530
-      TZ: Asia/Shanghai  # <-- 新增：上海时间
+      TZ: Asia/Shanghai # <-- 新增：上海时间
     ports:
       - "8000:3000"
     depends_on:
@@ -275,7 +271,7 @@ services:
     networks:
       - big-data-network
     environment:
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
@@ -290,7 +286,7 @@ services:
     networks:
       - big-data-network
     environment:
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -307,9 +303,51 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
-      - TZ=Asia/Shanghai  # <-- 新增：上海时间
+      - TZ=Asia/Shanghai # <-- 新增：上海时间
     depends_on:
       - prometheus
+
+#  # --- 8. Redpanda ---
+#  redpanda:
+#    image: docker.redpanda.com/redpandadata/redpanda:latest
+#    container_name: redpanda
+#    command:
+#      - redpanda
+#      - start
+#      - --overprovisioned
+#      - --smp=1
+#      - --memory=1G
+#      - --reserve-memory=0M
+#      - --node-id=0
+#      - --check=false
+#      - --kafka-addr=PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+#      - --advertise-kafka-addr=PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9093
+#    # user wants: 本地开发暴露 `9093` 端口，容器内暴露 `9092`
+#    ports:
+#      - "9093:9092"
+#      - "8081:8081"
+#      - "8082:8082"
+#    networks:
+#      - big-data-network
+#    volumes:
+#      - ./data/redpanda:/var/lib/redpanda/data
+#    environment:
+#      - TZ=Asia/Shanghai
+
+  # --- 9. ClickHouse ---
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - big-data-network
+    volumes:
+      - ./data/clickhouse:/var/lib/clickhouse
+      - ./data/clickhouse_logs:/var/log/clickhouse-server
+    environment:
+      - TZ=Asia/Shanghai
 
 volumes:
   kafka_data:

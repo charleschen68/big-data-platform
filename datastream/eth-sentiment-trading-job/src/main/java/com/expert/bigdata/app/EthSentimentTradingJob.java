@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
   --kafkaUrl "localhost:9092"
   --sourceTopic "eth_social_stream"
   --sinkTopic "topic_trade_signals"
-  --kafkaGroupId "eth-sentiment-group"
+  --kafkaGroupId "eth-sentiment-groupNew"
   --ollamaHost "localhost"
   --milvusHost "localhost"
   --milvusPort "19530"
@@ -71,14 +71,14 @@ public class EthSentimentTradingJob {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().setGlobalJobParameters(params);
         env.setParallelism(1);
-        env.enableCheckpointing(5000);
-        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+//        env.enableCheckpointing(5000);
+//        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
 
         // 引入带退避延迟的重启策略
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(
-                3, // 尝试重启 3 次
-                org.apache.flink.api.common.time.Time.seconds(10) // 每次失败后等待 10 秒再抢占 Slot
-        ));
+//        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(
+//                3, // 尝试重启 3 次
+//                org.apache.flink.api.common.time.Time.seconds(10) // 每次失败后等待 10 秒再抢占 Slot
+//        ));
 
         // 2. Kafka 数据源
         KafkaSource<String> source = KafkaSource.<String>builder()
@@ -107,7 +107,7 @@ public class EthSentimentTradingJob {
         // 并发队列崩溃导致生成截断死机。
         DataStream<String> sentimentStream = AsyncDataStream.orderedWait(
                 rawStream, new EthSentimentOllamaFunction(), 120, TimeUnit.SECONDS, 2)
-                .slotSharingGroup("heavy-sentimentStream-compute")
+                .slotSharingGroup("sentimentStream")
                         .name("sentimentStream");
         sentimentStream.print("[2-SentimentStream]");
 
