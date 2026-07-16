@@ -83,6 +83,7 @@ services:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - TZ=Asia/Shanghai # <-- 新增：上海时间
+      - ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-1.18.1.jar
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
@@ -92,8 +93,12 @@ services:
         execution.checkpointing.interval: 10000
         execution.checkpointing.mode: EXACTLY_ONCE
         state.backend: hashmap
-        state.checkpoints.dir: file:///opt/flink/checkpoints
-        state.savepoints.dir: file:///opt/flink/savepoints
+        state.checkpoints.dir: s3://flink-state/checkpoints
+        state.savepoints.dir: s3://flink-state/savepoints
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true
+        s3.access-key: minioadmin
+        s3.secret-key: minioadmin
         classloader.resolve-order: child-first
         env.java.opts.all: -Djava.net.preferIPv4Stack=true -Dnetworkaddress.cache.ttl=60 -Dnetworkaddress.cache.negative.ttl=0
     deploy:
@@ -124,6 +129,7 @@ services:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - TZ=Asia/Shanghai # <-- 新增：上海时间
+      - ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-1.18.1.jar
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
@@ -133,6 +139,12 @@ services:
         taskmanager.bind-host: 0.0.0.0
         classloader.resolve-order: child-first
         env.java.opts.all: -Djava.net.preferIPv4Stack=true -Dnetworkaddress.cache.ttl=60 -Dnetworkaddress.cache.negative.ttl=0
+        state.checkpoints.dir: s3://flink-state/checkpoints
+        state.savepoints.dir: s3://flink-state/savepoints
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true
+        s3.access-key: minioadmin
+        s3.secret-key: minioadmin
     deploy:
       resources:
         limits:
