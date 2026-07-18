@@ -158,7 +158,7 @@ services:
     networks:
       - big-data-network
     environment:
-      MYSQL_ROOT_PASSWORD: streampark
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置}
       MYSQL_DATABASE: streampark
       TZ: Asia/Shanghai # <-- 新增：上海时间
     volumes:

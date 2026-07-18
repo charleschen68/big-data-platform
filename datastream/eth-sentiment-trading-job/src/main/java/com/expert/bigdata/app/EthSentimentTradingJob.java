@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
   --milvusPort "19530"
   --dbUrl "jdbc:mysql://localhost:3306/streampark"
   --dbUsername "root"
-  --dbPassword "streampark"
+  --dbPassword "${DB_PASSWORD}"
   --embeddingUrl "http://localhost:11434/api/embeddings"
   --ollamaUrl "http://localhost:11434/api/generate"
  */
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
      --milvusPort "19530"
  --dbUrl "jdbc:mysql://mysql:3306/streampark"
  --dbUsername "root"
- --dbPassword "streampark"
+ --dbPassword "${DB_PASSWORD}"
      --embeddingUrl "http://host.docker.internal:11434/api/embeddings"
      --ollamaUrl "http://host.docker.internal:11434/api/generate"
  */

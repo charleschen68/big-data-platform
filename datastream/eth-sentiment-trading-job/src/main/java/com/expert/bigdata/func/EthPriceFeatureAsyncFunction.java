@@ -24,7 +24,7 @@ public class EthPriceFeatureAsyncFunction extends RichAsyncFunction<String, Stri
 
         jdbcUrl = params.getOrDefault("dbUrl","jdbc:mysql://localhost:3306/streampark");
         user = params.getOrDefault("dbUsername","root");
-        password = params.getOrDefault("dbPassword","streampark");
+        password = params.getOrDefault("dbPassword", System.getenv().getOrDefault("DB_PASSWORD", ""));
 
         // 建议：此处应初始化一个数据库连接池（如 Druid 或 HikariCP），而不是在 asyncInvoke 里建连接
     }

@@ -24,7 +24,8 @@ public class MyParameter {
         this.kafkaUrl = parameterTool.get("kafkaUrl", "localhost:9092");
         this.dbUrl = parameterTool.get("dbUrl", "jdbc:mysql://localhost:3306/streampark");
         this.dbUsername = parameterTool.get("dbUsername", "root");
-        this.dbPassword = parameterTool.get("dbPassword", "streampark");
+        // 密码不设硬编码默认值：优先 --dbPassword 参数，其次 DB_PASSWORD 环境变量
+        this.dbPassword = parameterTool.get("dbPassword", System.getenv().getOrDefault("DB_PASSWORD", ""));
         this.sourceTopic = parameterTool.get("sourceTopic", "topic1");
         this.sinkTopic = parameterTool.get("sinkTopic", "topic2");
         this.sinkTablename = parameterTool.get("sinkTablename");
