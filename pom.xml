@@ -139,8 +139,7 @@ under the License.
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
-            <version>1.2.83</version>
-            <scope>provided</scope>
+            <version>2.0.57</version>
         </dependency>
 
         <dependency>
