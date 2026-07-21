@@ -1,3 +1,4 @@
+name: big-data-platform
 version: '3.8'
 
 services:
@@ -16,7 +17,7 @@ services:
     volumes:
       - .:/workspace:cached
       - ~/.ssh:/root/.ssh:ro
-      - ./libs/jdk:/opt/jdk
+      - ../../libs/jdk:/opt/jdk
       - streampark_maven_repo:/root/.m2
     # 使用多行字符串语法（>）让结构更清晰
     # 分别启动两个脚本并将其日志输出到对应的文件夹下，最后保持容器运行
@@ -56,7 +57,7 @@ services:
           cpus: '0.50'
           memory: 2048M
     volumes:
-      - ./data/kafka:/var/lib/kafka/data
+      - ../../data/kafka:/var/lib/kafka/data
 
   # --- 3. Flink JobManager ---
   flink-jobmanager:
@@ -71,14 +72,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./libs/jdk:/opt/jdk
-      - ./data/streampark_workspace:/streampark/workspace
-      - ./flink-1.18.1/lib:/opt/flink/lib
-      - ./flink-data/checkpoints:/opt/flink/checkpoints
-      - ./flink-data/savepoints:/opt/flink/savepoints
-      - ./flink-data/usrlib:/opt/flink/usrlib
-      - ./data/flink_checkpoints:/flink_checkpoints
-      - ./data/flink_uploads:/opt/flink/usr
+      - ../../libs/jdk:/opt/jdk
+      - ../../data/streampark_workspace:/streampark/workspace
+      - ../../flink-1.18.1/lib:/opt/flink/lib
+      - ../../flink-data/checkpoints:/opt/flink/checkpoints
+      - ../../flink-data/savepoints:/opt/flink/savepoints
+      - ../../flink-data/usrlib:/opt/flink/usrlib
+      - ../../data/flink_checkpoints:/flink_checkpoints
+      - ../../data/flink_uploads:/opt/flink/usr
     environment:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -119,12 +120,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./libs/jdk:/opt/jdk
-      - ./data/streampark_workspace:/streampark/workspace
-      - ./flink-1.18.1/lib:/opt/flink/lib
-      - ./flink-data/checkpoints:/opt/flink/checkpoints
-      - ./flink-data/savepoints:/opt/flink/savepoints
-      - ./flink-data/usrlib:/opt/flink/usrlib
+      - ../../libs/jdk:/opt/jdk
+      - ../../data/streampark_workspace:/streampark/workspace
+      - ../../flink-1.18.1/lib:/opt/flink/lib
+      - ../../flink-data/checkpoints:/opt/flink/checkpoints
+      - ../../flink-data/savepoints:/opt/flink/savepoints
+      - ../../flink-data/usrlib:/opt/flink/usrlib
     environment:
       - JAVA_HOME=/opt/jdk
       - PATH=/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -162,7 +163,7 @@ services:
       MYSQL_DATABASE: streampark
       TZ: Asia/Shanghai # <-- 新增：上海时间
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - ../../data/mysql:/var/lib/mysql
     ports:
       - "3306:3306"
     deploy:
@@ -191,15 +192,15 @@ services:
       - flink-jobmanager
       - kafka
     volumes:
-      - ./libs/jdk:/opt/jdk
-      - ./data/streampark_h2:/root/streampark/h2-data
+      - ../../libs/jdk:/opt/jdk
+      - ../../data/streampark_h2:/root/streampark/h2-data
       - /var/run/docker.sock:/var/run/docker.sock
       - ~/.kube:/root/.kube
-      - ./flink-1.18.1:/opt/flink
-      - ./flink-data/usrlib:/opt/flink/usrlib
-      - ./data/streampark_workspace:/streampark/workspace
+      - ../../flink-1.18.1:/opt/flink
+      - ../../flink-data/usrlib:/opt/flink/usrlib
+      - ../../data/streampark_workspace:/streampark/workspace
       - streampark_maven_repo:/root/.m2
-      - ./data/flink_checkpoints:/flink_checkpoints
+      - ../../data/flink_checkpoints:/flink_checkpoints
   #    command: tail -f /dev/null
 
   # --- 7. AI 基础设施 (Milvus) ---
@@ -215,7 +216,7 @@ services:
       - ETCD_SNAPSHOT_COUNT=50000
       - TZ=Asia/Shanghai # <-- 新增：上海时间
     volumes:
-      - ./data/etcd:/etcd
+      - ../../data/etcd:/etcd
     command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
 
   minio:
@@ -231,7 +232,7 @@ services:
       - "9001:9001"
       - "9002:9000"
     volumes:
-      - ./data/minio:/data
+      - ../../data/minio:/data
     command: server /data --console-address ":9001"
 
   milvus:
@@ -248,8 +249,8 @@ services:
       COMMON_STORAGETYPE: minio
       TZ: Asia/Shanghai # <-- 原本已有，保持不变
     volumes:
-      - ./data/milvus:/var/lib/milvus
-      - ./data/logs/milvus:/milvus/logs
+      - ../../data/milvus:/var/lib/milvus
+      - ../../data/logs/milvus:/milvus/logs
     ports:
       - "19530:19530"
       - "9091:9091"
@@ -300,7 +301,7 @@ services:
     environment:
       - TZ=Asia/Shanghai # <-- 新增：上海时间
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     depends_on:
@@ -342,7 +343,7 @@ services:
 #    networks:
 #      - big-data-network
 #    volumes:
-#      - ./data/redpanda:/var/lib/redpanda/data
+#      - ../../data/redpanda:/var/lib/redpanda/data
 #    environment:
 #      - TZ=Asia/Shanghai
 
@@ -356,8 +357,8 @@ services:
     networks:
       - big-data-network
     volumes:
-      - ./data/clickhouse:/var/lib/clickhouse
-      - ./data/clickhouse_logs:/var/log/clickhouse-server
+      - ../../data/clickhouse:/var/lib/clickhouse
+      - ../../data/clickhouse_logs:/var/log/clickhouse-server
     environment:
       - TZ=Asia/Shanghai
 
