@@ -229,7 +229,7 @@ services:
       TZ: Asia/Shanghai # <-- 新增：上海时间
     ports:
       - "9001:9001"
-      - "9000:9000"
+      - "9002:9000"
     volumes:
       - ./data/minio:/data
     command: server /data --console-address ":9001"
