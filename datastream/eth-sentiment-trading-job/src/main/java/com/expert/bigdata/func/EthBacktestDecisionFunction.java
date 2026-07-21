@@ -93,9 +93,8 @@ public class EthBacktestDecisionFunction extends RichAsyncFunction<String, Strin
                 }
 
                 // 构造标量过滤 (注意: 此处提取 sentiment_score 使用 getLong 规避之前的类型问题)
-                String expr = String.format("sentiment_score == %d && rsi_14 >= %.2f && is_settled == true",
-                        node.getLong("sentiment_score"),
-                        node.getDouble("rsi_14") - 5);
+                String expr = DecisionLogic.buildFilterExpr(
+                        node.getLong("sentiment_score"), node.getDouble("rsi_14"));
 
                 SearchParam searchParam = SearchParam.newBuilder()
                         .withCollectionName("eth_sentiment_analysis")
@@ -110,47 +109,30 @@ public class EthBacktestDecisionFunction extends RichAsyncFunction<String, Strin
 
                 io.milvus.param.R<io.milvus.grpc.SearchResults> searchResp = milvusClient.search(searchParam);
 
-                double winCount = 0;
-                int validMatches = 0;
-                double maxSimilarity = 0;
-
+                List<DecisionLogic.BacktestMatch> matches = new ArrayList<>();
                 if (searchResp.getStatus() == io.milvus.param.R.Status.Success.getCode()
                         && searchResp.getData() != null) {
                     SearchResultsWrapper wrapper = new SearchResultsWrapper(searchResp.getData().getResults());
-                    List<SearchResultsWrapper.IDScore> scores = wrapper.getIDScore(0);
-
-                    for (SearchResultsWrapper.IDScore res : scores) {
-                        // 由于使用的是 COSINE，分数在 [-1, 1] 之间，越大越相似
-                        if (res.getScore() > 0.9) {
-                            validMatches++;
-                            maxSimilarity = Math.max(maxSimilarity, res.getScore());
-
-                            // 解析回测收益
-                            Object histReturnObj = res.get("return");
-                            float histReturn = 0;
-                            if (histReturnObj instanceof Number) {
-                                histReturn = ((Number) histReturnObj).floatValue();
-                            }
-                            if (histReturn > 0) {
-                                winCount++;
-                            }
-                        }
+                    for (SearchResultsWrapper.IDScore res : wrapper.getIDScore(0)) {
+                        Object histReturnObj = res.get("return");
+                        float histReturn = (histReturnObj instanceof Number)
+                                ? ((Number) histReturnObj).floatValue() : 0f;
+                        matches.add(new DecisionLogic.BacktestMatch(res.getScore(), histReturn));
                     }
                 }
-
-                double avgWinRate = (validMatches > 0) ? (winCount / validMatches) : 0;
+                DecisionLogic.BacktestStats stats = DecisionLogic.computeStats(matches);
+                double avgWinRate = stats.winRate();
+                double maxSimilarity = stats.maxSimilarity();
 
                 // 目标决策：最大相似度 > 90% 且 胜率 > 65%
                 // if (maxSimilarity > 0.9 && avgWinRate > 0.65) {
                 if (maxSimilarity >= 0.0) { // 用于测试，获取原始数据
                     JSONObject signal = new JSONObject();
-                    if (node.getLong("sentiment_score") > 8) {
-                        signal.put("action", "BUY");
-                    } else if (node.getLong("sentiment_score") < 2) {
-                        signal.put("action", "SELL");
-                    } else {
-                        signal.put("action", "HOLD");
-                    }
+                    String action = DecisionLogic.decideAction(node.getLong("sentiment_score"));
+                    String eventId = node.getString("id");
+                    signal.put("action", action);
+                    signal.put("event_id", eventId);
+                    signal.put("signal_id", DecisionLogic.signalId(eventId, action));
                     signal.put("token", "ETH");
                     signal.put("pubDate", node.getLong("pubDate"));
                     signal.put("sentiment_es", node.getLong("sentiment_es"));
