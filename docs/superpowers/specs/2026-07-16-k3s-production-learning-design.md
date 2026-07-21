@@ -61,8 +61,8 @@ big-data-platform/
 5. ~~`EthBacktestDecisionFunction` 补单元测试（决策核心、纯逻辑）。~~ ✓ 已完成（`140d9ff`）
 
 ### Phase 1 — 集群地基 + 可观测性（学：Helm、CRD、告警）
-OrbStack VM + k3s + kube-prometheus-stack + MinIO 进集群。首批告警规则：Kafka consumer lag 持续增长、pod 重启、磁盘水位，经 Telegram/飞书 webhook 推送到手机。
-✓ 验收：手机能收到测试告警。
+~~OrbStack VM + k3s + kube-prometheus-stack + MinIO 进集群。首批告警规则：Kafka consumer lag 持续增长、pod 重启、磁盘水位，经 Telegram 推送到手机。~~ ✓ 已完成（详见 `docs/superpowers/specs/2026-07-21-phase1-k3s-cluster-foundation-design.md`，实施提交见 `<commit>`）
+✓ 验收：手机能收到测试告警——已在 Task 6 Step 6 验证通过。
 
 ### Phase 2 — Python 采集器进集群（学：Deployment、探针、Secret、资源限额）
 采集器打镜像；常驻消费者（采集、settlement）为带 liveness probe 的 Deployment，`eth_model_retrain.py` 为 CronJob；参数经 ConfigMap/Secret 注入。Kafka 仍在 compose，经 ExternalName 访问。
