@@ -5,7 +5,7 @@ services:
   # --- [开发容器] ---
   dev-runner:
     build:
-      context: .
+      context: ../..
       dockerfile: .devcontainer/Dockerfile
     container_name: dev-box
     restart: always
@@ -15,7 +15,7 @@ services:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
     volumes:
-      - .:/workspace:cached
+      - ../..:/workspace:cached
       - ~/.ssh:/root/.ssh:ro
       - ../../libs/jdk:/opt/jdk
       - streampark_maven_repo:/root/.m2
