@@ -214,6 +214,13 @@ TMP_KUBECONFIG="$(mktemp)"
 
 cp "${HOME}/.kube/config" "${HOME}/.kube/config.bak-$(date +%Y%m%d%H%M%S)"
 
+# 清掉宿主机 kubeconfig 里同名的旧条目：kubectl --flatten 合并多个 KUBECONFIG 文件时按
+# "先列出的文件优先" 处理同名条目，如果不清理，k3s 重装后轮换的新 CA 会被这里残留的旧 CA
+# 静默盖掉（不会报错，之后连接才会因证书对不上而失败）。
+kubectl config delete-context "${CONTEXT_NAME}" 2>/dev/null || true
+kubectl config delete-cluster "${CONTEXT_NAME}" 2>/dev/null || true
+kubectl config unset "users.${CONTEXT_NAME}" 2>/dev/null || true
+
 orb -m "${VM_NAME}" -u root cat /etc/rancher/k3s/k3s.yaml > "${TMP_KUBECONFIG}"
 
 sed -i '' \
