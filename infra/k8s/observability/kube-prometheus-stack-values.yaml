@@ -7,6 +7,10 @@ prometheus:
           resources:
             requests:
               storage: 10Gi
+    additionalScrapeConfigs:
+      - job_name: 'kafka-exporter'
+        static_configs:
+          - targets: ['host.orb.internal:9308']
 
 alertmanager:
   alertmanagerSpec:

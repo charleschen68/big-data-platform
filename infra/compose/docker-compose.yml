@@ -59,6 +59,17 @@ services:
     volumes:
       - ../../data/kafka:/var/lib/kafka/data
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    container_name: kafka-exporter
+    command: ["--kafka.server=kafka:29092"]
+    networks:
+      - big-data-network
+    ports:
+      - "9308:9308"
+    depends_on:
+      - kafka
+
   # --- 3. Flink JobManager ---
   flink-jobmanager:
     user: root
