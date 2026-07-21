@@ -21,3 +21,63 @@ alertmanager:
           resources:
             requests:
               storage: 2Gi
+    secrets:
+      - telegram-bot
+  config:
+    global:
+      resolve_timeout: 5m
+    inhibit_rules:
+      - source_matchers:
+          - 'severity = critical'
+        target_matchers:
+          - 'severity =~ warning|info'
+        equal:
+          - 'namespace'
+          - 'alertname'
+      - source_matchers:
+          - 'severity = warning'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - 'namespace'
+          - 'alertname'
+      - source_matchers:
+          - 'alertname = InfoInhibitor'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - 'namespace'
+      - target_matchers:
+          - 'alertname = InfoInhibitor'
+    route:
+      group_by: ['namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'telegram'
+      routes:
+      - receiver: 'null'
+        matchers:
+          - alertname = "Watchdog"
+    receivers:
+    - name: 'null'
+    - name: 'telegram'
+      telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram-bot/token
+        chat_id_file: /etc/alertmanager/secrets/telegram-bot/chat-id
+    templates:
+    - '/etc/alertmanager/config/*.tmpl'
+
+additionalPrometheusRulesMap:
+  kafka-lag-rules:
+    groups:
+      - name: kafka.rules
+        rules:
+          - alert: KafkaConsumerGroupLagHigh
+            expr: kafka_consumergroup_lag > 1000
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kafka consumer group {{ $labels.consumergroup }} lag 过高"
+              description: "topic={{ $labels.topic }} partition={{ $labels.partition }} lag={{ $value }}，已持续超过 10 分钟"
