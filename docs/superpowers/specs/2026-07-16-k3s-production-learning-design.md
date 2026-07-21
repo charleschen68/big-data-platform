@@ -58,7 +58,7 @@ big-data-platform/
 2. ~~`eth_trade_settlement.py` 增加幂等键（按信号 ID 去重），防止重复下单。~~ 跳过（用户决定不执行）
 3. ~~fastjson 1.2.83（已知 RCE 链）替换为 fastjson2。~~ ✓ 已完成（`973f3ff`）
 4. ~~密码从 Javadoc、`MyParameter` 默认值中清除，统一走 `.env`/启动参数。~~ ✓ 已完成（`fc28476`）
-5. ~~`EthBacktestDecisionFunction` 补单元测试（决策核心、纯逻辑）。~~ ✓ 已完成（`40268e1`）
+5. ~~`EthBacktestDecisionFunction` 补单元测试（决策核心、纯逻辑）。~~ ✓ 已完成（`140d9ff`）
 
 ### Phase 1 — 集群地基 + 可观测性（学：Helm、CRD、告警）
 OrbStack VM + k3s + kube-prometheus-stack + MinIO 进集群。首批告警规则：Kafka consumer lag 持续增长、pod 重启、磁盘水位，经 Telegram/飞书 webhook 推送到手机。
