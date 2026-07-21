@@ -3,6 +3,9 @@
 # ==========================================
 # 忽略所有层级下的 data 文件夹
 data/
+# Exception: allow infra/k8s/data/ for k3s cluster configuration
+!infra/k8s/data/
+!infra/k8s/data/**
 # 忽略所有层级下的 flink-data 文件夹
 flink-data/
 flink-1.18.1/
