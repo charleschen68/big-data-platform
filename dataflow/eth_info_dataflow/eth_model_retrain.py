@@ -1,108 +1,135 @@
-# 这个脚本将完成以下任务：
-#
-# 数据提取：从 Milvus 提取指定时间段内已结算（is_settled=true）的数据。
-#
-# 模型训练：使用 XGBoost（量化常用）训练一个从“向量”到“收益率”的回归模型。
-#
-# 模型保存：保存模型供 Flink 或 Python 决策逻辑加载。
-#
-# 数据清理：备份数据后，从 Milvus 中物理删除已训练的旧数据。
+"""Train the ETH sentiment model from settled Milvus trading records.
+
+Historical records are retained by default.  Enabling deletion requires both an
+explicit environment setting and a successfully written Parquet backup.
+"""
+
+import json
+import logging
 import time
-import joblib
-import numpy as np
-import pandas as pd
-import os
-from pymilvus import connections, Collection
-from xgboost import XGBRegressor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-# --- 配置 ---
-MILVUS_CONFIG = {"host": "localhost", "port": "19530"}
-COLLECTION_NAME = "eth_sentiment_analysis"
-MODEL_SAVE_PATH = "./models/eth_sentiment_xgb.joblib"
-BACKUP_DIR = "./backups/"
+from collector_runtime.config import env_bool, env_int, env_str
 
-# 确保模型和备份目录存在
-os.makedirs("./models", exist_ok=True)
-os.makedirs(BACKUP_DIR, exist_ok=True)
 
-def train_and_cleanup():
-    # 1. 连接 Milvus
-    connections.connect("default", **MILVUS_CONFIG)
-    collection = Collection(COLLECTION_NAME)
-    collection.load()
+logger = logging.getLogger(__name__)
 
-    # 2. 计算时间窗口（保留6个月，训练最老3个月）
-    now = datetime.now()
-    six_months_ago_ts = int((now - timedelta(days=180)).timestamp() * 1000)
-    three_months_ago_ts = int((now - timedelta(days=90)).timestamp() * 1000)
 
-    start_date = datetime.fromtimestamp(six_months_ago_ts/1000).strftime('%Y%m%d')
-    end_date = datetime.fromtimestamp(three_months_ago_ts/1000).strftime('%Y%m%d')
+def load_retrain_settings() -> dict[str, object]:
+    artifact_root = Path(env_str("RETRAIN_ARTIFACT_ROOT", "/artifacts"))
+    return {
+        "milvus_host": env_str("MILVUS_HOST", "milvus"),
+        "milvus_port": env_int("MILVUS_PORT", 19530),
+        "collection": env_str("MILVUS_COLLECTION", "eth_sentiment_analysis"),
+        "minimum_samples": env_int("RETRAIN_MINIMUM_SAMPLES", 100),
+        "delete_after_backup": env_bool("RETRAIN_DELETE_AFTER_BACKUP", False),
+        "model_path": artifact_root / "models" / "eth_sentiment_xgb.joblib",
+        "backup_dir": artifact_root / "backups",
+    }
 
-    print(f"📅 目标训练周期: {start_date} -> {end_date}")
 
-    # 3. 提取数据（增加 sentiment_score 字段）
-    res = collection.query(
-        expr=f"is_settled == true and timestamp >= {six_months_ago_ts} and timestamp < {three_months_ago_ts}",
-        output_fields=["id", "vector", "sentiment_score", "return_24h", "raw_content", "timestamp"]
-    )
+def build_training_filter(now: datetime) -> str:
+    six_months_ago = int((now - timedelta(days=180)).timestamp() * 1000)
+    three_months_ago = int((now - timedelta(days=90)).timestamp() * 1000)
+    return f"is_settled == true and pub_date >= {six_months_ago} and pub_date < {three_months_ago}"
 
-    if len(res) < 100:
-        print(f"⚠️ 样本量不足 ({len(res)})，建议积累更多数据后再训练。")
-        return
 
-    # 4. 数据备份（在删除前持久化到 Parquet 文件）
-    df = pd.DataFrame(res)
-    backup_file = f"{BACKUP_DIR}eth_data_backup_{start_date}_{end_date}.parquet"
-    # Parquet 格式完美保留向量数组结构
-    df.to_parquet(backup_file, engine='fastparquet')
-    print(f"💾 数据已安全备份至: {backup_file}")
+def train_and_cleanup() -> None:
+    try:
+        # Keep optional and native-backed dependencies out of module import so
+        # configuration validation and safety controls remain testable.
+        import joblib
+        import numpy as np
+        import pandas as pd
+        from pymilvus import Collection, connections
+        from xgboost import XGBRegressor
 
-    # 5. 特征工程：拼接 [sentiment_score] + [vector]
-    # 这样模型既能看到语义特征，也能看到直观的情绪评分
-    X = []
-    for row in res:
-        score = float(row['sentiment_score'])
-        vector = row['vector']
-        # 将分数作为第一个特征，后面跟着 768 维向量，总维度 769
-        combined_features = [score] + vector
-        X.append(combined_features)
+        settings = load_retrain_settings()
+        model_path = settings["model_path"]
+        backup_dir = settings["backup_dir"]
+        if not isinstance(model_path, Path) or not isinstance(backup_dir, Path):
+            raise TypeError("retraining artifact paths must be Path instances")
 
-    X = np.array(X)
-    y = np.array([row['return_24h'] for row in res])
-    ids = [row['id'] for row in res]
+        connections.connect(
+            "default",
+            host=settings["milvus_host"],
+            port=settings["milvus_port"],
+        )
+        collection = Collection(settings["collection"])
+        collection.load()
 
-    print(f"🚀 开始训练 XGBoost，特征维度: {X.shape[1]}，样本数: {len(X)}")
+        now = datetime.now(timezone.utc)
+        training_filter = build_training_filter(now)
+        six_months_ago = now - timedelta(days=180)
+        three_months_ago = now - timedelta(days=90)
+        logger.info(
+            "Training settled records from %s through %s",
+            six_months_ago.date(),
+            three_months_ago.date(),
+        )
 
-    # 6. 训练模型
-    model = XGBRegressor(
-        n_estimators=200,      # 增加迭代次数
-        max_depth=6,
-        learning_rate=0.05,
-        objective='reg:squarederror',
-        tree_method='hist'     # M4 Pro 跑这个极快
-    )
-    model.fit(X, y)
+        records = collection.query(
+            expr=training_filter,
+            output_fields=["event_id", "vector", "sentiment_score", "return", "pub_date"],
+        )
+        minimum_samples = settings["minimum_samples"]
+        if not isinstance(minimum_samples, int):
+            raise TypeError("RETRAIN_MINIMUM_SAMPLES must be an integer")
+        if len(records) < minimum_samples:
+            logger.warning(
+                "Not retraining: %d samples available, %d required",
+                len(records),
+                minimum_samples,
+            )
+            return
 
-    # 7. 保存模型
-    joblib.dump(model, MODEL_SAVE_PATH)
-    print(f"✅ 模型训练完成并更新: {MODEL_SAVE_PATH}")
+        # A backup must be durable before any deletion is even considered.
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_file = backup_dir / (
+            f"eth_data_backup_{six_months_ago:%Y%m%d}_{three_months_ago:%Y%m%d}.parquet"
+        )
+        pd.DataFrame(records).to_parquet(backup_file, engine="pyarrow")
+        logger.info("Backed up %d records to %s", len(records), backup_file)
 
-    # 8. 安全清理 Milvus 历史数据
-    print(f"🧹 正在清理 Milvus 中的旧数据 ({len(ids)} 条)...")
-    batch_size = 500
-    for i in range(0, len(ids), batch_size):
-        batch_ids = ids[i:i + batch_size]
-        collection.delete(f"id in {batch_ids}")
+        features = np.array(
+            [[float(row["sentiment_score"]), *row["vector"]] for row in records]
+        )
+        labels = np.array([row["return"] for row in records])
+        event_ids = [row["event_id"] for row in records]
 
-    collection.flush()
-    print("✨ 任务成功完成：备份 -> 训练 -> 清理。")
+        model = XGBRegressor(
+            n_estimators=200,
+            max_depth=6,
+            learning_rate=0.05,
+            objective="reg:squarederror",
+            tree_method="hist",
+        )
+        model.fit(features, labels)
+        joblib.dump(model, model_path)
+        logger.info("Saved trained model to %s", model_path)
+
+        delete_after_backup = settings["delete_after_backup"]
+        if not isinstance(delete_after_backup, bool):
+            raise TypeError("RETRAIN_DELETE_AFTER_BACKUP must be a boolean")
+        if not delete_after_backup:
+            logger.info("Retaining training records: RETRAIN_DELETE_AFTER_BACKUP is false")
+            return
+
+        for start in range(0, len(event_ids), 500):
+            batch_ids = event_ids[start : start + 500]
+            collection.delete(f"event_id in {json.dumps(batch_ids)}")
+        collection.flush()
+        logger.info("Deleted %d backed-up training records", len(event_ids))
+    except Exception:
+        logger.exception("Model retraining job failed")
+        raise
+
 
 if __name__ == "__main__":
-    start_t = time.time()
+    started_at = time.monotonic()
     try:
         train_and_cleanup()
-    except Exception as e:
-        print(f"❌ 运行失败: {e}")
-    print(f"⏱️ 总耗时: {time.time() - start_t:.2f}s")
+    finally:
+        logger.info("Model retraining job finished in %.2fs", time.monotonic() - started_at)
