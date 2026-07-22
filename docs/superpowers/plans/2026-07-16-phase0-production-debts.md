@@ -645,7 +645,7 @@ CREATE TABLE IF NOT EXISTS processed_signals (
 应用到运行中的 MySQL：
 
 ```bash
-docker compose exec -T mysql mysql -uroot -pstreampark streampark -e "CREATE TABLE IF NOT EXISTS processed_signals (signal_id VARCHAR(255) NOT NULL PRIMARY KEY, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP); SHOW TABLES LIKE 'processed_signals';"
+docker compose exec -T mysql mysql -uroot -p"${MYSQL_PASSWORD}" streampark -e "CREATE TABLE IF NOT EXISTS processed_signals (signal_id VARCHAR(255) NOT NULL PRIMARY KEY, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP); SHOW TABLES LIKE 'processed_signals';"
 ```
 
 预期输出含 `processed_signals`。

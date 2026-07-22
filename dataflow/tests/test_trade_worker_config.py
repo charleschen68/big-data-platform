@@ -80,7 +80,7 @@ def market_settings():
     return {
         "mysql_host": "mysql",
         "mysql_user": "root",
-        "mysql_password": "password",
+        "mysql_password": "<injected-for-test>",
         "mysql_database": "configured_database",
         "interval": 1,
     }

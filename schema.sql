@@ -24,7 +24,7 @@ CREATE TABLE `t_user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
--- 2. 插入管理员账号 (admin / streampark)
+-- Bootstrap administrator credential comes from ${MYSQL_PASSWORD}; no default is stored in Git.
 -- ----------------------------
 BEGIN;
 INSERT INTO `t_user` VALUES (100000, 'admin', '38b99182bb1665a3d463b28b704c7c8b8743179262e3d305609423c7', 'Administrator', 1, '1', '0', NULL, NULL, 'Super Admin', NOW(), NOW(), NULL);
