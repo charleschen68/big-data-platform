@@ -3,3 +3,8 @@ kind: Kustomization
 resources:
   - external-services.yaml
   - configmap.yaml
+  - artifacts-pvc.yaml
+  - rss-deployment.yaml
+  - market-deployment.yaml
+  - settlement-deployment.yaml
+  - retrain-cronjob.yaml
