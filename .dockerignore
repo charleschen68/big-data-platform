@@ -1,0 +1,21 @@
+# Allowlist the collector build context.  Keep credentials, VCS metadata,
+# generated data, and every unrelated source file out of image builds.
+*
+/.git/
+/secrets/
+/data/
+!.dockerignore
+!dataflow/
+!dataflow/docker/
+!dataflow/docker/*.Dockerfile
+!dataflow/requirements/
+!dataflow/requirements/*.txt
+!dataflow/collector_runtime/
+!dataflow/collector_runtime/**
+**/__pycache__/
+!dataflow/eth_info_dataflow/
+!dataflow/eth_info_dataflow/rss_to_eth_social_stream.py
+!dataflow/eth_info_dataflow/eth_model_retrain.py
+!dataflow/eth_trade_dataflow/
+!dataflow/eth_trade_dataflow/market_data_collector.py
+!dataflow/eth_trade_dataflow/eth_trade_settlement.py
