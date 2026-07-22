@@ -9,7 +9,10 @@
 !dataflow/docker/
 !dataflow/docker/*.Dockerfile
 !dataflow/requirements/
-!dataflow/requirements/*.txt
+!dataflow/requirements/rss.txt
+!dataflow/requirements/market.txt
+!dataflow/requirements/settlement.txt
+!dataflow/requirements/retrain.txt
 !dataflow/collector_runtime/
 !dataflow/collector_runtime/**
 **/__pycache__/
