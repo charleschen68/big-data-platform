@@ -9,8 +9,30 @@ import email.utils
 from typing import List, Set, Dict
 from datetime import datetime, timezone, timedelta
 from aiokafka import AIOKafkaProducer
-from prometheus_client import start_http_server, Counter
 from bs4 import BeautifulSoup
+from collector_runtime.config import env_int, env_str
+from collector_runtime.health import WorkloadHealth, start_health_server
+
+
+DEFAULT_RSS_FEEDS = (
+    "https://cointelegraph.com/rss,"
+    "https://www.coindesk.com/arc/outboundfeeds/rss/,"
+    "https://decrypt.co/feed"
+)
+
+
+def load_rss_settings() -> dict[str, object]:
+    feeds = [value.strip() for value in env_str("RSS_FEEDS", DEFAULT_RSS_FEEDS).split(",") if value.strip()]
+    if not feeds:
+        raise ValueError("RSS_FEEDS must contain at least one URL")
+    return {
+        "feeds": feeds,
+        "topic": env_str("RSS_TOPIC", "eth_social_stream"),
+        "check_interval": env_int("RSS_CHECK_INTERVAL_SECONDS", 60),
+        "bootstrap_servers": env_str("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092"),
+        "health_port": env_int("HEALTH_PORT", 8080),
+        "stale_after": env_int("HEALTH_STALE_AFTER_SECONDS", 180),
+    }
 
 # --- 1. 配置日志 ---
 logging.basicConfig(
@@ -22,14 +44,20 @@ logger = logging.getLogger(__name__)
 # 定义东八区（上海时间）
 SH_TZ = timezone(timedelta(hours=8))
 
-# --- 2. Prometheus 监控指标 ---
-NEWS_SENT = Counter('rss_news_sent_total', 'Total news sent to Kafka', ['topic'])
-
 class RSSCollector:
-    def __init__(self, urls: List[str], bootstrap_servers: str = 'kafka:29092', check_interval: int = 60):
+    def __init__(
+        self,
+        urls: List[str],
+        bootstrap_servers: str,
+        check_interval: int,
+        topic: str,
+        health: WorkloadHealth,
+    ):
         self.urls = urls
         self.bootstrap_servers = bootstrap_servers
         self.check_interval = check_interval
+        self.topic = topic
+        self.health = health
         self.seen_entries: Set[str] = set()
         self.session = None
         self.producer = None
@@ -49,6 +77,7 @@ class RSSCollector:
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
         await self.producer.start()
+        self.health.mark_ready()
         logger.info(f"📡 Kafka 生产者已连接至: {self.bootstrap_servers}")
 
         try:
@@ -56,6 +85,7 @@ class RSSCollector:
                 self.session = session
                 while True:
                     await self.run_once()
+                    self.health.heartbeat()
                     logger.info(f"💤 等待 {self.check_interval} 秒后进行下一轮抓取...")
                     await asyncio.sleep(self.check_interval)
         finally:
@@ -122,10 +152,8 @@ class RSSCollector:
 
     async def process_item(self, item: Dict):
         """发送至 Kafka"""
-        topic = "eth_social_stream"
         try:
-            await self.producer.send_and_wait(topic, item)
-            NEWS_SENT.labels(topic=topic).inc()
+            await self.producer.send_and_wait(self.topic, item)
             logger.info(f"✅ 已同步至 Kafka: {item['title'][:40]}...")
         except Exception as e:
             logger.error(f"❌ Kafka 发送失败: {e}")
@@ -138,18 +166,15 @@ class RSSCollector:
             await self.process_item(item)
 
 if __name__ == "__main__":
-    start_http_server(8000)
-
-    crypto_feeds = [
-        "https://cointelegraph.com/rss",
-        "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "https://decrypt.co/feed"
-    ]
-
+    settings = load_rss_settings()
+    health = WorkloadHealth(settings["stale_after"])
+    start_health_server(health, settings["health_port"])
     collector = RSSCollector(
-        urls=crypto_feeds,
-        bootstrap_servers='kafka:29092',
-        check_interval=60
+        urls=settings["feeds"],
+        bootstrap_servers=settings["bootstrap_servers"],
+        check_interval=settings["check_interval"],
+        topic=settings["topic"],
+        health=health,
     )
 
     try:
