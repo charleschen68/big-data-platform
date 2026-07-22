@@ -1,0 +1,4 @@
+aiohttp==3.13.5
+aiokafka==0.13.0
+beautifulsoup4==4.14.3
+feedparser==6.0.12
