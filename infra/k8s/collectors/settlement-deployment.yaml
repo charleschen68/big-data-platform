@@ -4,7 +4,7 @@ metadata:
   name: settlement-worker
   namespace: collectors
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:

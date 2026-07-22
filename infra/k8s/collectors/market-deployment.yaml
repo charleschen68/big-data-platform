@@ -4,7 +4,7 @@ metadata:
   name: market-collector
   namespace: collectors
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:

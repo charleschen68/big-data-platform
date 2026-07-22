@@ -2,29 +2,6 @@ name: big-data-platform
 version: '3.8'
 
 services:
-  # --- [开发容器] ---
-  dev-runner:
-    build:
-      context: ../..
-      dockerfile: .devcontainer/Dockerfile
-    container_name: dev-box
-    restart: always
-    environment:
-      - JAVA_HOME=/opt/jdk
-      - PATH=/opt/venv/bin:/opt/jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - TZ=Asia/Shanghai
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ../..:/workspace:cached
-      - ~/.ssh:/root/.ssh:ro
-      - ../../libs/jdk:/opt/jdk
-      - streampark_maven_repo:/root/.m2
-    # 使用多行字符串语法（>）让结构更清晰
-    # 分别启动两个脚本并将其日志输出到对应的文件夹下，最后保持容器运行
-    command: >
-      bash -c " python3 /workspace/dataflow/eth_info_dataflow/rss_to_eth_social_stream.py >> /workspace/dataflow/eth_info_dataflow/rss_task.log 2>&1 & python3 /workspace/dataflow/eth_trade_dataflow/market_data_collector.py >> /workspace/dataflow/eth_trade_dataflow/market_task.log 2>&1 & python3 /workspace/dataflow/eth_trade_dataflow/eth_trade_settlement.py >> /workspace/dataflow/eth_trade_dataflow/settlement.log 2>&1 & sleep infinity"
-    networks:
-      - big-data-network
   # --- 1. Apache Kafka (KRaft模式) ---
   kafka:
     image: apache/kafka:3.7.0
@@ -36,7 +13,7 @@ services:
     networks:
       - big-data-network
     environment:
-      PATH: "/opt/kafka/bin:${PATH}"
+      PATH: "/opt/kafka/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       CLUSTER_ID: "MKU3OEVBNTcwNTJDRkFDMz"
