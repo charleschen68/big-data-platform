@@ -814,7 +814,7 @@ grep -n 'streampark' docker-compose.yml
 
 ```bash
 docker compose config > /dev/null && echo "compose 配置有效"
-docker compose up -d mysql && docker compose exec -T mysql mysql -uroot -p"$(grep MYSQL_ROOT_PASSWORD .env | cut -d= -f2)" -e "SELECT 1"
+set -a && . ./.env && set +a && docker compose up -d mysql && docker compose exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1"
 mvn -q clean package -DskipTests -pl common -am
 grep -rn '"streampark"' common/src datastream --include='*.java' || echo "Java 源码已无硬编码密码"
 ```
