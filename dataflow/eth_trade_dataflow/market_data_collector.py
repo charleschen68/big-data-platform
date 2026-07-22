@@ -93,7 +93,7 @@ class MarketDataCollector:
             df = df.dropna()
 
             sql = """
-                  REPLACE INTO trade.eth_kline_features
+                  REPLACE INTO eth_kline_features
                       (timestamp, datetime_sh, price_at_t, rsi_14, atr_14, high, low, close)
                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) \
                   """
