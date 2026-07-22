@@ -7,6 +7,8 @@
 !.dockerignore
 !dataflow/
 !dataflow/docker/
+!datastream/
+!datastream/**
 !dataflow/docker/*.Dockerfile
 !dataflow/requirements/
 !dataflow/requirements/rss.txt
