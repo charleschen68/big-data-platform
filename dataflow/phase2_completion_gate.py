@@ -33,17 +33,20 @@ PHASE2_ADDRESS_PATHS = (
     HEALTH_RUNTIME,
 )
 
-_VALUE = r'''(?P<value>"[^"\n]*"|'[^'\n]*'|[^\s,;]+)'''
-_JAVA_PASSWORD_ARGUMENT = re.compile(rf"(?i)--dbpassword\s*(?:=|\s)\s*{_VALUE}")
-_MYSQL_PASSWORD_ARGUMENT = re.compile(rf"(?i)\bmysql\b.*?\s-p{_VALUE}")
+_JAVA_PASSWORD_ARGUMENT = re.compile(
+    r"(?i)--dbpassword\s*(?:=|\s)\s*"
+    r"(?P<value>.*?)(?=\s+--[a-z][\w-]*(?:\s|=)|\s*(?:\*/)?$)"
+)
+_SHELL_WORD = r'''(?:"[^"\n]*"|'[^'\n]*'|[^\s"']+)+'''
+_MYSQL_PASSWORD_ARGUMENT = re.compile(
+    rf"(?i)\bmysql\b.*?\s-p(?P<value>{_SHELL_WORD}(?:\s*\+\s*{_SHELL_WORD})?)"
+)
 _SCHEMA_PASSWORD_COMMENT = re.compile(
-    rf"(?ix)^\s*(?://|--|\#|/\*).*?"
-    rf"(?:\b(?:administrator|admin|root)\b.*?\bpassword\b|"
-    rf"\bpassword\b.*?\b(?:administrator|admin|root)\b)"
-    rf"\s*(?:is|:|=)\s*{_VALUE}"
+    r"(?ix)^\s*(?://|--|\#|/\*).*?\badmin\b\s*/\s*(?P<value>[^)\n]+)"
 )
 _FIXTURE_PASSWORD_ASSIGNMENT = re.compile(
-    rf'''(?ix)["']?mysql_password["']?\s*(?:=|:)\s*{_VALUE}'''
+    r'''(?ix)["']?mysql_password["']?\s*(?:=|:)\s*'''
+    r'''(?P<value>.*?)(?=\s*,\s*$|\s*}\s*$|$)'''
 )
 _CREDENTIAL_PATTERNS = {
     JAVA_CONTEXT: (_JAVA_PASSWORD_ARGUMENT,),

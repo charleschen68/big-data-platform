@@ -40,9 +40,9 @@ def test_phase0_mysql_password_argument_is_found_after_line_movement():
     ]
 
 
-def test_schema_admin_password_comment_is_found_after_line_movement():
+def test_actual_schema_admin_slash_literal_comment_is_found_after_line_movement():
     literal = "punctuated!@#[]"
-    text = "header\n" + f"-- Default administrator password: {literal}\n"
+    text = "header\n" + f"-- 2. 插入管理员账号 (admin / {literal})\n"
 
     assert gate.audit_text(SCHEMA_CONTEXT, text) == [
         f"{SCHEMA_CONTEXT}:2: literal credential value"
@@ -68,6 +68,42 @@ def test_only_deliberate_credential_placeholders_are_allowed():
         assert gate.audit_text(JAVA_CONTEXT, f'// --dbPassword "{value}"') == [
             f"{JAVA_CONTEXT}:1: literal credential value"
         ]
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "text"),
+    [
+        (JAVA_CONTEXT, '// --dbPassword "${UPPER_ENV_NAME}"'),
+        (PLAN_CONTEXT, 'mysql -uroot -p"${UPPER_ENV_NAME}" -e "SELECT 1"'),
+        (SCHEMA_CONTEXT, "-- 2. 插入管理员账号 (admin / <redacted>)"),
+        (FIXTURE_CONTEXT, '"mysql_password": "${UPPER_ENV_NAME}",'),
+    ],
+)
+def test_each_scoped_context_accepts_an_exact_deliberate_placeholder(relative_path, text):
+    assert gate.audit_text(relative_path, text) == []
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "text"),
+    [
+        (JAVA_CONTEXT, '// --dbPassword "${UPPER_ENV}"suffix'),
+        (JAVA_CONTEXT, "// --dbPassword prefix${UPPER_ENV}"),
+        (JAVA_CONTEXT, '// --dbPassword "${UPPER_ENV}" + "suffix"'),
+        (PLAN_CONTEXT, 'mysql -uroot -p"${UPPER_ENV}"suffix -e "SELECT 1"'),
+        (PLAN_CONTEXT, 'mysql -uroot -pprefix${UPPER_ENV} -e "SELECT 1"'),
+        (PLAN_CONTEXT, 'mysql -uroot -p"${UPPER_ENV}" + "suffix" -e "SELECT 1"'),
+        (SCHEMA_CONTEXT, '-- 2. 插入管理员账号 (admin / "<redacted>"suffix)'),
+        (SCHEMA_CONTEXT, "-- 2. 插入管理员账号 (admin / prefix<redacted>)"),
+        (SCHEMA_CONTEXT, '-- 2. 插入管理员账号 (admin / "<redacted>" + "suffix")'),
+        (FIXTURE_CONTEXT, '"mysql_password": "<injected-for-test>"suffix,'),
+        (FIXTURE_CONTEXT, '"mysql_password": prefix<injected-for-test>,'),
+        (FIXTURE_CONTEXT, '"mysql_password": "<injected-for-test>" + "suffix",'),
+    ],
+)
+def test_safe_placeholder_must_be_the_complete_context_value(relative_path, text):
+    assert gate.audit_text(relative_path, text) == [
+        f"{relative_path}:1: literal credential value"
+    ]
 
 
 def test_service_and_schema_identifiers_are_not_credential_contexts():
@@ -174,8 +210,13 @@ def test_retrain_cronjob_has_read_only_root_and_declared_writable_mounts():
     container = next(item for item in pod_spec["containers"] if item["name"] == "model-retrain")
 
     assert container["securityContext"]["readOnlyRootFilesystem"] is True
-    mounts = {item["name"]: item["mountPath"] for item in container["volumeMounts"]}
-    assert mounts == {"artifacts": "/artifacts", "tmp": "/tmp"}
+    mounts = {item["name"]: item for item in container["volumeMounts"]}
+    assert {name: item["mountPath"] for name, item in mounts.items()} == {
+        "artifacts": "/artifacts",
+        "tmp": "/tmp",
+    }
+    assert mounts["artifacts"].get("readOnly", False) is False
+    assert mounts["tmp"].get("readOnly", False) is False
     volumes = {item["name"]: item for item in pod_spec["volumes"]}
     assert volumes["artifacts"]["persistentVolumeClaim"]["claimName"] == "collector-artifacts"
     assert volumes["tmp"]["emptyDir"] == {}
