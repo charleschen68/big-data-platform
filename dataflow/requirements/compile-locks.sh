@@ -19,24 +19,54 @@ case "${1:-}" in
     ;;
 esac
 
+MOUNT="type=bind,src=${REQUIREMENTS_DIR},dst=/work"
+if [ "${MODE}" = "default" ]; then
+  MOUNT+=",readonly"
+fi
+
 docker run --rm --platform linux/arm64 \
   --env HOME=/tmp \
   --env PIP_TOOLS_CACHE_DIR=/tmp/pip-tools-cache \
-  --mount "type=bind,src=${REQUIREMENTS_DIR},dst=/work" \
+  --mount "${MOUNT}" \
   --workdir /work \
   --user "$(id -u):$(id -g)" \
   "${PYTHON_IMAGE}" \
   sh -ec '
-    python -m venv /tmp/pip-tools
-    /tmp/pip-tools/bin/pip install --no-cache-dir --require-hashes --requirement bootstrap.txt
+    temp_dir="$(mktemp -d /tmp/compile-locks.XXXXXX)"
+    trap "rm -rf \"${temp_dir}\"" EXIT
+    python -m venv "${temp_dir}/pip-tools"
+    "${temp_dir}/pip-tools/bin/pip" install --no-cache-dir --require-hashes --requirement /work/bootstrap.txt
+
+    dependency_hash_body() {
+      awk "
+        BEGIN { header = 1 }
+        header && (/^#/ || /^[[:space:]]*$/) { next }
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*$/ { next }
+        { header = 0; print }
+      " "$1"
+    }
+
     for name in rss market settlement retrain; do
       if [ "$1" = "refresh" ]; then
-        /tmp/pip-tools/bin/pip-compile --upgrade --rebuild --allow-unsafe --generate-hashes --strip-extras \
-          --output-file "${name}.txt" "${name}.in"
+        "${temp_dir}/pip-tools/bin/pip-compile" --upgrade --rebuild --allow-unsafe --generate-hashes --strip-extras \
+          --output-file "/work/${name}.txt" "/work/${name}.in"
       else
-        /tmp/pip-tools/bin/pip-compile --dry-run --allow-unsafe --generate-hashes --strip-extras \
-          --constraint "${name}.txt" \
-          --output-file "${name}.txt" "${name}.in"
+        "${temp_dir}/pip-tools/bin/pip" install --no-cache-dir --dry-run --require-hashes \
+          --requirement "/work/${name}.txt"
+        candidate="${temp_dir}/${name}.txt"
+        "${temp_dir}/pip-tools/bin/pip-compile" --quiet --allow-unsafe --generate-hashes --strip-extras --no-header \
+          --constraint "/work/${name}.txt" \
+          --output-file "${candidate}" "/work/${name}.in"
+        committed_body="${temp_dir}/${name}.committed.txt"
+        candidate_body="${temp_dir}/${name}.candidate.txt"
+        dependency_hash_body "/work/${name}.txt" > "${committed_body}"
+        dependency_hash_body "${candidate}" > "${candidate_body}"
+        if ! cmp -s "${committed_body}" "${candidate_body}"; then
+          echo "${name}: lock graph or hashes differ from the committed lock" >&2
+          diff -u "${committed_body}" "${candidate_body}" >&2 || true
+          exit 1
+        fi
       fi
     done
   ' sh "${MODE}"

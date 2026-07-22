@@ -215,3 +215,62 @@ uses it.
 `--refresh` deliberately permits resolver upgrades; review and commit its lock
 diffs as a dependency update. The default mode remains the reproducible,
 transitive-version-preserving path.
+
+## Final lock-generator remediation (2026-07-22)
+
+Default `compile-locks.sh` now bind-mounts the requirements directory with
+`readonly`. For each image-facing lock it first runs a hash-enforced
+`pip install --dry-run --require-hashes`, then creates a no-header candidate in
+container-local `/tmp` with the committed lock as a constraint. The comparison
+retains every dependency and hash line verbatim while excluding only generated
+headers and pip-tools `# via` annotations, which change when constraints are
+present but do not alter the resolved graph or artifacts. A dependency/hash
+body mismatch reports the affected lock and exits nonzero. `--refresh` keeps a
+writable requirements mount and is the only mode that runs `pip-compile` with
+`--upgrade --rebuild` against the committed output paths.
+
+### Final lock-generator validation
+
+The focused regression suite uses an executing Docker double and verifies the
+default read-only mount, refresh writable mount, four hash dry-run installs,
+container-local no-header candidate generation with committed constraints,
+mismatch failure, and refresh rewrites:
+
+```bash
+bash -n dataflow/requirements/compile-locks.sh
+pytest -q dataflow/tests/test_compile_locks_script.py
+# 6 passed in 2.56s
+git diff --check -- dataflow/requirements/compile-locks.sh \
+  dataflow/tests/test_compile_locks_script.py
+```
+
+The full dataflow suite also passed:
+
+```bash
+pytest -q dataflow/tests
+# 40 passed in 4.45s
+```
+
+The real pinned arm64 default mode was launched from `/tmp`, with its output
+captured at `/tmp/task5-default-lock-validation-final.log`. Docker reported
+the validation container (`54001cb1ff33`) exited successfully:
+
+```bash
+docker events --since 10m --until 2026-07-22T11:25:28Z \
+  --filter container=54001cb1ff33 \
+  --format '{{.Action}} {{.Actor.Attributes.exitCode}}'
+# create <no value>
+# attach <no value>
+# start <no value>
+# die 0
+# destroy <no value>
+
+git diff --quiet -- dataflow/requirements/rss.txt \
+  dataflow/requirements/market.txt \
+  dataflow/requirements/settlement.txt \
+  dataflow/requirements/retrain.txt
+# exit 0
+```
+
+No image-facing lock changed, so no collector image rebuild or reimport was
+needed.
