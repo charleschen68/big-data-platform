@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Migrate 5 Java Flink jobs from compose StreamPark to k3s `flink` namespace using Apache Flink Kubernetes Operator, with savepoint-based zero-downtime upgrades.
+**Goal:** Migrate 1 Java Flink job (`EthSentimentTradingJob`) from compose StreamPark to k3s `flink` namespace using Apache Flink Kubernetes Operator, with savepoint-based zero-downtime upgrades.
 
-**Architecture:** Each Flink job gets its own Docker image (fat JAR bundled) and its own `FlinkDeployment` CR. The Flink K8s Operator (Helm-installed) watches CRs and manages JobManager + TaskManager pods. Checkpoints write to k3s MinIO (data namespace). Kafka remains in compose, accessed via ExternalName Service.
+**Architecture:** The Flink job gets its own Docker image (fat JAR bundled) and its own `FlinkDeployment` CR. The Flink K8s Operator (Helm-installed) watches CRs and manages JobManager + TaskManager pods. Checkpoints write to k3s MinIO (data namespace). Kafka remains in compose, accessed via ExternalName Service.
 
 **Tech Stack:**
 - Apache Flink 1.18.1 (existing)
@@ -37,14 +37,10 @@ infra/k8s/flink/
 ├── kustomization.yaml          # Kustomization for all Flink resources
 ├── operator-helm.yaml          # Helm install manifest (HelmFile-style for k3s)
 ├── flink-operator-values.yaml  # Helm values for Operator
-├── eth-sentiment-analysis-job.yaml
-├── eth-sentiment-trading-job.yaml
-├── kafka2milvus.yaml
-├── employee-message-processor.yaml
-└── realtime-riskcontrol-embedding-job.yaml
+└── eth-sentiment-trading-job.yaml
 
-datastream/{job}/
-└── Dockerfile                  # 5 new Dockerfiles, one per job
+datastream/eth-sentiment-trading-job/
+└── Dockerfile
 
 infra/scripts/
 └── build-and-import-flink.sh  # New: build + import Flink images to k3s
@@ -58,7 +54,7 @@ infra/scripts/
 - Create: `infra/k8s/flink/kustomization.yaml`
 
 **Interfaces:**
-- Produces: kustomization that references all 5 FlinkDeployment YAMLs and the operator manifest
+- Produces: kustomization that references the eth-sentiment-trading-job FlinkDeployment YAML and the operator manifest
 
 **Steps:**
 
@@ -70,11 +66,7 @@ kind: Kustomization
 namespace: flink
 resources:
   - operator-helm.yaml
-  - eth-sentiment-analysis-job.yaml
   - eth-sentiment-trading-job.yaml
-  - kafka2milvus.yaml
-  - employee-message-processor.yaml
-  - realtime-riskcontrol-embedding-job.yaml
 ```
 
 - [ ] **Step 2: Verify kustomization syntax**
@@ -84,44 +76,18 @@ Expected: No errors, outputs all resources with `namespace: flink`
 
 ---
 
-### Task 2: Create Dockerfiles for the 5 Flink jobs
+### Task 2: Create Dockerfile for EthSentimentTradingJob
 
 **Files:**
-- Create: `datastream/eth-sentiment-analysis-job/Dockerfile`
 - Create: `datastream/eth-sentiment-trading-job/Dockerfile`
-- Create: `datastream/kafka2milvus/Dockerfile`
-- Create: `datastream/employee-message-processor/Dockerfile`
-- Create: `datastream/realtime-riskcontrol-embedding-job/Dockerfile`
 
 **Interfaces:**
-- Consumes: fat JARs from `datastream/{job}/target/{job}-1.0-SNAPSHOT.jar` (already built)
-- Produces: Docker images named `big-data/{job-name}:phase3`
+- Consumes: fat JAR from `datastream/eth-sentiment-trading-job/target/eth-sentiment-trading-job-1.0-SNAPSHOT.jar` (already built)
+- Produces: Docker image named `big-data/eth-sentiment-trading-job:phase3`
 
 **Steps:**
 
-- [ ] **Step 1: Create Dockerfile for eth-sentiment-analysis-job**
-
-```dockerfile
-FROM eclipse-temurin:17-jdk-arm64-alpine@sha256:a04722d572a3d77f30c2a37e7e7ab0f3a5b2e6c8d9e1f2a3b4c5d6e7f8a9b0c
-
-ENV JAVA_HOME=/opt/java \
-    FLINK_HOME=/opt/flink \
-    PATH=/opt/java/bin:/opt/flink/bin:$PATH \
-    HOME=/tmp
-
-RUN apk add --no-cache bash
-
-WORKDIR /opt/flink
-
-COPY eth-sentiment-analysis-job/target/eth-sentiment-analysis-job-1.0-SNAPSHOT.jar \
-     /opt/flink/jobs/eth-sentiment-analysis-job.jar
-
-EXPOSE 8081
-
-CMD ["sh", "-c", "flink run-application -p 2 /opt/flink/jobs/eth-sentiment-analysis-job.jar"]
-```
-
-- [ ] **Step 2: Create Dockerfile for eth-sentiment-trading-job**
+- [ ] **Step 1: Create Dockerfile for eth-sentiment-trading-job**
 
 ```dockerfile
 FROM eclipse-temurin:17-jdk-arm64-alpine@sha256:a04722d572a3d77f30c2a37e7e7ab0f3a5b2e6c8d9e1f2a3b4c5d6e7f8a9b0c
@@ -143,153 +109,30 @@ EXPOSE 8081
 CMD ["sh", "-c", "flink run-application -p 2 /opt/flink/jobs/eth-sentiment-trading-job.jar"]
 ```
 
-- [ ] **Step 3: Create Dockerfile for kafka2milvus**
-
-```dockerfile
-FROM eclipse-temurin:17-jdk-arm64-alpine@sha256:a04722d572a3d77f30c2a37e7e7ab0f3a5b2e6c8d9e1f2a3b4c5d6e7f8a9b0c
-
-ENV JAVA_HOME=/opt/java \
-    FLINK_HOME=/opt/flink \
-    PATH=/opt/java/bin:/opt/flink/bin:$PATH \
-    HOME=/tmp
-
-RUN apk add --no-cache bash
-
-WORKDIR /opt/flink
-
-COPY kafka2milvus/target/kafka2milvus-1.0-SNAPSHOT.jar \
-     /opt/flink/jobs/kafka2milvus.jar
-
-EXPOSE 8081
-
-CMD ["sh", "-c", "flink run-application -p 2 /opt/flink/jobs/kafka2milvus.jar"]
-```
-
-- [ ] **Step 4: Create Dockerfile for employee-message-processor**
-
-```dockerfile
-FROM eclipse-temurin:17-jdk-arm64-alpine@sha256:a04722d572a3d77f30c2a37e7e7ab0f3a5b2e6c8d9e1f2a3b4c5d6e7f8a9b0c
-
-ENV JAVA_HOME=/opt/java \
-    FLINK_HOME=/opt/flink \
-    PATH=/opt/java/bin:/opt/flink/bin:$PATH \
-    HOME=/tmp
-
-RUN apk add --no-cache bash
-
-WORKDIR /opt/flink
-
-COPY employee-message-processor/target/employee-message-processor-1.0-SNAPSHOT.jar \
-     /opt/flink/jobs/employee-message-processor.jar
-
-EXPOSE 8081
-
-CMD ["sh", "-c", "flink run-application -p 2 /opt/flink/jobs/employee-message-processor.jar"]
-```
-
-- [ ] **Step 5: Create Dockerfile for realtime-riskcontrol-embedding-job**
-
-```dockerfile
-FROM eclipse-temurin:17-jdk-arm64-alpine@sha256:a04722d572a3d77f30c2a37e7e7ab0f3a5b2e6c8d9e1f2a3b4c5d6e7f8a9b0c
-
-ENV JAVA_HOME=/opt/java \
-    FLINK_HOME=/opt/flink \
-    PATH=/opt/java/bin:/opt/flink/bin:$PATH \
-    HOME=/tmp
-
-RUN apk add --no-cache bash
-
-WORKDIR /opt/flink
-
-COPY realtime-riskcontrol-embedding-job/target/realtime-riskcontrol-embedding-job-1.0-SNAPSHOT.jar \
-     /opt/flink/jobs/realtime-riskcontrol-embedding-job.jar
-
-EXPOSE 8081
-
-CMD ["sh", "-c", "flink run-application -p 2 /opt/flink/jobs/realtime-riskcontrol-embedding-job.jar"]
-```
-
-- [ ] **Step 6: Build all 5 images and verify**
+- [ ] **Step 2: Build the image and verify**
 
 Run:
 ```bash
 PLATFORM="linux/arm64"
-for job in eth-sentiment-analysis-job eth-sentiment-trading-job kafka2milvus employee-message-processor realtime-riskcontrol-embedding-job; do
-  docker build --platform "${PLATFORM}" -f "datastream/${job}/Dockerfile" -t "big-data/${job}:phase3" .
-done
-docker images | grep 'big-data/' | grep phase3
+docker build --platform "${PLATFORM}" -f datastream/eth-sentiment-trading-job/Dockerfile -t big-data/eth-sentiment-trading-job:phase3 .
+docker images | grep 'big-data/eth-sentiment-trading-job' | grep phase3
 ```
-Expected: 5 images with `big-data/` prefix and `phase3` tag, all `linux/arm64`
+Expected: 1 image with `big-data/eth-sentiment-trading-job:phase3`, `linux/arm64`
 
 ---
 
-### Task 3: Create FlinkDeployment YAMLs for the 5 jobs
+### Task 3: Create FlinkDeployment YAML for eth-sentiment-trading-job
 
 **Files:**
-- Create: `infra/k8s/flink/eth-sentiment-analysis-job.yaml`
 - Create: `infra/k8s/flink/eth-sentiment-trading-job.yaml`
-- Create: `infra/k8s/flink/kafka2milvus.yaml`
-- Create: `infra/k8s/flink/employee-message-processor.yaml`
-- Create: `infra/k8s/flink/realtime-riskcontrol-embedding-job.yaml`
 
 **Interfaces:**
 - Consumes: `FlinkDeployment` CRD (installed by Operator in Task 4)
-- Produces: 5 FlinkDeployment resources, each managing a JobManager + TaskManager pod pair
+- Produces: 1 FlinkDeployment resource managing a JobManager + TaskManager pod pair
 
 **Steps:**
 
-- [ ] **Step 1: Create FlinkDeployment for eth-sentiment-analysis-job**
-
-```yaml
-apiVersion: flink.apache.org/v1beta1
-kind: FlinkDeployment
-metadata:
-  name: eth-sentiment-analysis
-  namespace: flink
-spec:
-  flinkVersion: v1_18
-  flinkImage: "apache/flink-kubernetes-operator:1.2.0"
-  ingress:
-    class: nginx
-    labels:
-      app: eth-sentiment-analysis
-  jobManager:
-    resource:
-      cpu: 1
-      memory: "1024m"
-    replicas: 1
-  taskManager:
-    resource:
-      cpu: 2
-      memory: "2048m"
-    numberOfTaskSlots: 4
-  persistence: true
-  job:
-    jarURI: local:///opt/flink/jobs/eth-sentiment-analysis-job.jar
-    parallelism: 2
-    upgradeMode: savepoint
-    stateRetention:
-      failOnTTLInUse: true
-  stateBackend:
-    type: hashmap
-  checkpointing:
-    checkpointTimeout: 10000
-    maxConcurrentCheckpoints: 1
-    unalignedCheckpoints: false
-  env:
-    - name: S3_ENDPOINT
-      value: "http://minio.data.svc.cluster.local:9000"
-    - name: S3_ACCESS_KEY
-      value: "minioadmin"
-    - name: S3_SECRET_KEY
-      value: "minioadmin"
-    - name: KAFKA_BOOTSTRAP_SERVERS
-      value: "kafka:29092"
-    - name: TZ
-      value: "Asia/Shanghai"
-```
-
-- [ ] **Step 2: Create FlinkDeployment for eth-sentiment-trading-job**
+- [ ] **Step 1: Create FlinkDeployment for eth-sentiment-trading-job**
 
 ```yaml
 apiVersion: flink.apache.org/v1beta1
@@ -340,169 +183,10 @@ spec:
       value: "Asia/Shanghai"
 ```
 
-- [ ] **Step 3: Create FlinkDeployment for kafka2milvus**
-
-```yaml
-apiVersion: flink.apache.org/v1beta1
-kind: FlinkDeployment
-metadata:
-  name: kafka2milvus
-  namespace: flink
-spec:
-  flinkVersion: v1_18
-  flinkImage: "apache/flink-kubernetes-operator:1.2.0"
-  ingress:
-    class: nginx
-    labels:
-      app: kafka2milvus
-  jobManager:
-    resource:
-      cpu: 1
-      memory: "1024m"
-    replicas: 1
-  taskManager:
-    resource:
-      cpu: 2
-      memory: "2048m"
-    numberOfTaskSlots: 4
-  persistence: true
-  job:
-    jarURI: local:///opt/flink/jobs/kafka2milvus.jar
-    parallelism: 2
-    upgradeMode: savepoint
-    stateRetention:
-      failOnTTLInUse: true
-  stateBackend:
-    type: hashmap
-  checkpointing:
-    checkpointTimeout: 10000
-    maxConcurrentCheckpoints: 1
-    unalignedCheckpoints: false
-  env:
-    - name: S3_ENDPOINT
-      value: "http://minio.data.svc.cluster.local:9000"
-    - name: S3_ACCESS_KEY
-      value: "minioadmin"
-    - name: S3_SECRET_KEY
-      value: "minioadmin"
-    - name: KAFKA_BOOTSTRAP_SERVERS
-      value: "kafka:29092"
-    - name: MILVUS_HOST
-      value: "milvus"
-    - name: MILVUS_PORT
-      value: "19530"
-    - name: TZ
-      value: "Asia/Shanghai"
-```
-
-- [ ] **Step 4: Create FlinkDeployment for employee-message-processor**
-
-```yaml
-apiVersion: flink.apache.org/v1beta1
-kind: FlinkDeployment
-metadata:
-  name: employee-message-processor
-  namespace: flink
-spec:
-  flinkVersion: v1_18
-  flinkImage: "apache/flink-kubernetes-operator:1.2.0"
-  ingress:
-    class: nginx
-    labels:
-      app: employee-message-processor
-  jobManager:
-    resource:
-      cpu: 1
-      memory: "1024m"
-    replicas: 1
-  taskManager:
-    resource:
-      cpu: 2
-      memory: "2048m"
-    numberOfTaskSlots: 4
-  persistence: true
-  job:
-    jarURI: local:///opt/flink/jobs/employee-message-processor.jar
-    parallelism: 2
-    upgradeMode: savepoint
-    stateRetention:
-      failOnTTLInUse: true
-  stateBackend:
-    type: hashmap
-  checkpointing:
-    checkpointTimeout: 10000
-    maxConcurrentCheckpoints: 1
-    unalignedCheckpoints: false
-  env:
-    - name: S3_ENDPOINT
-      value: "http://minio.data.svc.cluster.local:9000"
-    - name: S3_ACCESS_KEY
-      value: "minioadmin"
-    - name: S3_SECRET_KEY
-      value: "minioadmin"
-    - name: KAFKA_BOOTSTRAP_SERVERS
-      value: "kafka:29092"
-    - name: TZ
-      value: "Asia/Shanghai"
-```
-
-- [ ] **Step 5: Create FlinkDeployment for realtime-riskcontrol-embedding-job**
-
-```yaml
-apiVersion: flink.apache.org/v1beta1
-kind: FlinkDeployment
-metadata:
-  name: realtime-riskcontrol-embedding
-  namespace: flink
-spec:
-  flinkVersion: v1_18
-  flinkImage: "apache/flink-kubernetes-operator:1.2.0"
-  ingress:
-    class: nginx
-    labels:
-      app: realtime-riskcontrol-embedding
-  jobManager:
-    resource:
-      cpu: 1
-      memory: "1024m"
-    replicas: 1
-  taskManager:
-    resource:
-      cpu: 2
-      memory: "2048m"
-    numberOfTaskSlots: 4
-  persistence: true
-  job:
-    jarURI: local:///opt/flink/jobs/realtime-riskcontrol-embedding-job.jar
-    parallelism: 2
-    upgradeMode: savepoint
-    stateRetention:
-      failOnTTLInUse: true
-  stateBackend:
-    type: hashmap
-  checkpointing:
-    checkpointTimeout: 10000
-    maxConcurrentCheckpoints: 1
-    unalignedCheckpoints: false
-  env:
-    - name: S3_ENDPOINT
-      value: "http://minio.data.svc.cluster.local:9000"
-    - name: S3_ACCESS_KEY
-      value: "minioadmin"
-    - name: S3_SECRET_KEY
-      value: "minioadmin"
-    - name: KAFKA_BOOTSTRAP_SERVERS
-      value: "kafka:29092"
-    - name: OLLAMA_HOST
-      value: "host.docker.internal"
-    - name: TZ
-      value: "Asia/Shanghai"
-```
-
-- [ ] **Step 6: Validate all YAML files**
+- [ ] **Step 2: Validate the YAML file**
 
 Run: `kubectl kustomize infra/k8s/flink/ | kubectl apply --dry-run=client -f -`
-Expected: No validation errors, all 5 FlinkDeployment resources listed
+Expected: No validation errors, 1 FlinkDeployment resource listed
 
 ---
 
@@ -638,32 +322,30 @@ Expected:
 
 ---
 
-### Task 5: Apply FlinkDeployments and verify
+### Task 5: Apply FlinkDeployment and verify
 
 **Files:**
-- Modifies: All 5 FlinkDeployment YAMLs (applied, not changed)
+- Modifies: `infra/k8s/flink/eth-sentiment-trading-job.yaml` (applied, not changed)
 - Checks: `infra/k8s/collectors/external-services.yaml` (Kafka ExternalName)
 
 **Interfaces:**
 - Consumes: Flink K8s Operator (from Task 4), Kafka ExternalName Service, MinIO in data namespace
-- Produces: 5 running Flink jobs, each with JM+TM pods
+- Produces: 1 running Flink job with JM+TM pods
 
 **Steps:**
 
-- [ ] **Step 1: Apply all FlinkDeployments**
+- [ ] **Step 1: Apply the FlinkDeployment**
 
 Run:
 ```bash
 kubectl --context k3s-node apply -k infra/k8s/flink/
 ```
 
-- [ ] **Step 2: Wait for all deployments to become Ready**
+- [ ] **Step 2: Wait for the deployment to become Ready**
 
 Run:
 ```bash
-for job in eth-sentiment-analysis eth-sentiment-trading kafka2milvus employee-message-processor realtime-riskcontrol-embedding; do
-  kubectl --context k3s-node -n flink wait --for=condition=ready flinkdeployment/"$job" --timeout=180s
-done
+kubectl --context k3s-node -n flink wait --for=condition=ready flinkdeployment/eth-sentiment-trading --timeout=180s
 ```
 
 - [ ] **Step 3: Verify pods are running**
@@ -672,7 +354,7 @@ Run:
 ```bash
 kubectl --context k3s-node -n flink get pods
 ```
-Expected: 10 pods (5 JobManager + 5 TaskManager), all in `Running` state
+Expected: 2 pods (1 JobManager + 1 TaskManager), all in `Running` state
 
 - [ ] **Step 4: Verify Flink REST API**
 
@@ -683,18 +365,18 @@ sleep 2
 curl -s http://localhost:8081/submissions | python3 -m json.tool
 kill %1
 ```
-Expected: 5 submissions listed, each with `jobId` and `state: RUNNING`
+Expected: 1 submission listed with `jobId` and `state: RUNNING`
 
 ---
 
-### Task 6: Create build script for Flink images
+### Task 6: Create build script for Flink image
 
 **Files:**
 - Create: `infra/scripts/build-and-import-flink.sh`
 
 **Interfaces:**
-- Consumes: Maven-built JARs in `datastream/{job}/target/`, k3s VM via `orb`
-- Produces: 5 images imported into k3s containerd
+- Consumes: Maven-built JAR in `datastream/eth-sentiment-trading-job/target/`, k3s VM via `orb`
+- Produces: 1 image imported into k3s containerd
 
 **Steps:**
 
@@ -710,26 +392,17 @@ cd "${REPO_ROOT}"
 
 VM_NAME="${VM_NAME:-k3s-node}"
 PLATFORM="linux/arm64"
+JOB="eth-sentiment-trading-job"
 
-jobs=(
-  eth-sentiment-analysis-job
-  eth-sentiment-trading-job
-  kafka2milvus
-  employee-message-processor
-  realtime-riskcontrol-embedding-job
-)
+image="big-data/${JOB}:phase3"
+echo "Building ${image}..."
+docker build --platform "${PLATFORM}" \
+  -f "datastream/${JOB}/Dockerfile" \
+  -t "${image}" .
+echo "Importing ${image} to ${VM_NAME}..."
+docker save "${image}" | orb -m "${VM_NAME}" -u root k3s ctr images import -
 
-for job in "${jobs[@]}"; do
-  image="big-data/${job}:phase3"
-  echo "Building ${image}..."
-  docker build --platform "${PLATFORM}" \
-    -f "datastream/${job}/Dockerfile" \
-    -t "${image}" .
-  echo "Importing ${image} to ${VM_NAME}..."
-  docker save "${image}" | orb -m "${VM_NAME}" -u root k3s ctr images import -
-done
-
-echo "Verifying images in k3s..."
+echo "Verifying image in k3s..."
 orb -m "${VM_NAME}" -u root k3s ctr images list | grep 'big-data/' | grep phase3
 ```
 
@@ -740,7 +413,7 @@ Run:
 chmod +x infra/scripts/build-and-import-flink.sh
 bash infra/scripts/build-and-import-flink.sh
 ```
-Expected: All 5 images built and imported, no errors
+Expected: 1 image built and imported, no errors
 
 ---
 
@@ -763,19 +436,18 @@ Run:
 orb -m k3s-node -u root k3s exec deployment/minio \
   -- mc alias set myminio http://minio.data.svc.cluster.local:9000 minioadmin minioadmin
 orb -m k3s-node -u root k3s exec deployment/minio \
-  -- mc ls myminio/flink-state/checkpoints/
+  -- mc ls myminio/flink-state/checkpoints/eth-sentiment-trading/
 ```
-Expected: Checkpoint directories for all 5 jobs
+Expected: Checkpoint directory for eth-sentiment-trading job
 
-- [ ] **Step 2: Trigger a manual savepoint**
+- [ ] **Step 2: Verify savepoint location**
 
 Run:
 ```bash
-for job in eth-sentiment-analysis eth-sentiment-trading kafka2milvus employee-message-processor realtime-riskcontrol-embedding; do
-  kubectl --context k3s-node -n flink get flinkdeployment "$job" -o jsonpath="{.status.jobStatus.savepointLocation}{'\n'}"
-done
+kubectl --context k3s-node -n flink get flinkdeployment eth-sentiment-trading \
+  -o jsonpath="{.status.jobStatus.savepointLocation}{'\n'}"
 ```
-Expected: Non-empty savepoint locations for all jobs
+Expected: Non-empty savepoint location
 
 - [ ] **Step 3: Stop StreamPark in compose (final cutover)**
 
@@ -786,13 +458,13 @@ docker compose stop streampark
 docker compose ps | grep -v streampark || echo "StreamPark stopped"
 ```
 
-- [ ] **Step 4: Verify all 5 jobs continue running after StreamPark stop**
+- [ ] **Step 4: Verify the job continues running after StreamPark stop**
 
 Run:
 ```bash
-kubectl --context k3s-node -n flink get flinkdeployment
+kubectl --context k3s-node -n flink get flinkdeployment eth-sentiment-trading
 ```
-Expected: All 5 `STATUS: Running`, no restart storms
+Expected: `STATUS: Running`, no restart storm
 
 ---
 
@@ -808,16 +480,12 @@ Expected: All 5 `STATUS: Running`, no restart storms
 
 ```bash
 git add infra/k8s/flink/
-git add datastream/eth-sentiment-analysis-job/Dockerfile
 git add datastream/eth-sentiment-trading-job/Dockerfile
-git add datastream/kafka2milvus/Dockerfile
-git add datastream/employee-message-processor/Dockerfile
-git add datastream/realtime-riskcontrol-embedding-job/Dockerfile
 git add infra/scripts/build-and-import-flink.sh
-git commit -m "feat: Phase 3 — Flink K8s Operator migration for 5 jobs
+git commit -m "feat: Phase 3 — Flink K8s Operator migration for EthSentimentTradingJob
 
-- Helm-style FlinkDeployment manifests for all 5 Flink jobs
-- Dockerfiles for each job (ARM64, fat JAR bundled)
+- FlinkDeployment manifest for eth-sentiment-trading-job
+- Dockerfile (ARM64, fat JAR bundled)
 - build-and-import-flink.sh script
 - Namespace, kustomization, and operator setup
 - Checkpoint to k3s MinIO, Kafka via ExternalName
@@ -831,30 +499,29 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **1. Spec coverage:**
 - [x] Operator Helm install → Task 4
-- [x] 5 FlinkDeployment CRs → Task 3
-- [x] Docker images with fat JAR → Task 2
-- [x] MinIO connection via S3_ENDPOINT → Task 3 (env vars in each CR)
+- [x] 1 FlinkDeployment CR (eth-sentiment-trading-job) → Task 3
+- [x] Docker image with fat JAR → Task 2
+- [x] MinIO connection via S3_ENDPOINT → Task 3 (env vars in CR)
 - [x] StreamPark下线 → Task 7 Step 3
 - [x] Live upgrade via savepoint → Task 7 Steps 2, 4
 - [x] Checkpoint to k3s MinIO → Task 7 Step 1
 - [x] Kafka via ExternalName → Task 3 (kafka:29092)
-- [x] Ollama via host.docker.internal → Task 3 (realtime-riskcontrol-embedding-job)
-- [x] Build + import images → Task 6
+- [x] Build + import image → Task 6
 
 **2. Placeholder scan:**
 - No "TBD", "TODO", or "implement later" found
-- All code blocks are complete (Dockerfiles, YAMLs, shell commands)
+- All code blocks are complete (Dockerfile, YAMLs, shell commands)
 - All file paths are exact
 - All commands have expected output
 
 **3. Type consistency:**
-- All FlinkDeployment CRs use `flinkVersion: v1_18` (consistent with Flink 1.18.1)
-- All Dockerfiles use same base image `eclipse-temurin:17-jdk-arm64-alpine`
-- All images named `big-data/{job}:phase3` (consistent naming)
-- S3 credentials consistent across all CRs (`minioadmin`/`minioadmin`)
+- FlinkDeployment uses `flinkVersion: v1_18` (consistent with Flink 1.18.1)
+- Dockerfile uses base image `eclipse-temurin:17-jdk-arm64-alpine`
+- Image named `big-data/eth-sentiment-trading-job:phase3` (consistent naming)
+- S3 credentials consistent (`minioadmin`/`minioadmin`)
 
 **4. Scope check:**
-- Focused on Flink K8s Operator migration only
+- Focused on Flink K8s Operator migration for EthSentimentTradingJob only
 - No unrelated refactoring proposed
-- 5 jobs map 1:1 to existing datastream modules
+- 1 job maps to existing `datastream/eth-sentiment-trading-job` module
 - Build script follows Phase 2 pattern (`build-and-import-collectors.sh`)
