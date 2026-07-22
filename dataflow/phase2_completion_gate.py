@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import ipaddress
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -33,14 +34,6 @@ PHASE2_ADDRESS_PATHS = (
     HEALTH_RUNTIME,
 )
 
-_JAVA_PASSWORD_ARGUMENT = re.compile(
-    r"(?i)--dbpassword\s*(?:=|\s)\s*"
-    r"(?P<value>.*?)(?=\s+--[a-z][\w-]*(?:\s|=)|\s*(?:\*/)?$)"
-)
-_SHELL_WORD = r'''(?:"[^"\n]*"|'[^'\n]*'|[^\s"']+)+'''
-_MYSQL_PASSWORD_ARGUMENT = re.compile(
-    rf"(?i)\bmysql\b.*?\s-p(?P<value>{_SHELL_WORD}(?:\s*\+\s*{_SHELL_WORD})?)"
-)
 _SCHEMA_PASSWORD_COMMENT = re.compile(
     r"(?ix)^\s*(?://|--|\#|/\*).*?\badmin\b\s*/\s*(?P<value>[^)\n]+)"
 )
@@ -49,11 +42,11 @@ _FIXTURE_PASSWORD_ASSIGNMENT = re.compile(
     r'''(?P<value>.*?)(?=\s*,\s*$|\s*}\s*$|$)'''
 )
 _CREDENTIAL_PATTERNS = {
-    JAVA_CONTEXT: (_JAVA_PASSWORD_ARGUMENT,),
-    PLAN_CONTEXT: (_MYSQL_PASSWORD_ARGUMENT,),
     SCHEMA_CONTEXT: (_SCHEMA_PASSWORD_COMMENT,),
     FIXTURE_CONTEXT: (_FIXTURE_PASSWORD_ASSIGNMENT,),
 }
+_CLI_CONTEXTS = {JAVA_CONTEXT, PLAN_CONTEXT}
+_LONG_CREDENTIAL_OPTIONS = {"--password", "--dbpassword"}
 _ENV_PLACEHOLDER = re.compile(r"\$\{[A-Z][A-Z0-9_]*\}")
 _SAFE_SENTINELS = {"<redacted>", "<placeholder>", "<injected-for-test>"}
 _FORBIDDEN_HOST = re.compile(
@@ -76,11 +69,92 @@ def _is_allowed_credential_value(value: str) -> bool:
     return not value or _ENV_PLACEHOLDER.fullmatch(value) is not None or value in _SAFE_SENTINELS
 
 
+def _tokenize_command(line: str) -> list[str]:
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+    lexer.commenters = ""
+    lexer.whitespace_split = True
+    return list(lexer)
+
+
+def _normalize_option(token: str) -> str:
+    return token.lstrip("/*").lower()
+
+
+def _has_credential_option_fragment(relative_path: str, line: str) -> bool:
+    normalized = line.lower()
+    has_long_option = any(option in normalized for option in _LONG_CREDENTIAL_OPTIONS)
+    if relative_path == JAVA_CONTEXT:
+        return has_long_option
+    return "mysql" in normalized and (has_long_option or "-p" in normalized)
+
+
+def _value_with_adjacent_concat(tokens: list[str], value_index: int) -> str | None:
+    if value_index >= len(tokens):
+        return None
+    value = tokens[value_index]
+    if value in {";", "&&", "||", "|"}:
+        return None
+    if value_index + 1 < len(tokens) and tokens[value_index + 1] == "+":
+        return value + "+<concatenated>"
+    return value
+
+
+def _credential_values_from_tokens(relative_path: str, tokens: list[str]) -> list[str | None]:
+    normalized_tokens = [_normalize_option(token) for token in tokens]
+    if relative_path == PLAN_CONTEXT and "mysql" not in normalized_tokens:
+        return []
+
+    values: list[str | None] = []
+    for index, token in enumerate(tokens):
+        normalized = normalized_tokens[index]
+        if normalized in _LONG_CREDENTIAL_OPTIONS:
+            values.append(_value_with_adjacent_concat(tokens, index + 1))
+            continue
+        option, separator, value = normalized.partition("=")
+        if separator and option in _LONG_CREDENTIAL_OPTIONS:
+            original_value = token[token.find("=") + 1 :]
+            if index + 1 < len(tokens) and tokens[index + 1] == "+":
+                original_value += "+<concatenated>"
+            values.append(original_value)
+            continue
+        if relative_path != PLAN_CONTEXT or not token.startswith("-p"):
+            continue
+        if token == "-p":
+            values.append(_value_with_adjacent_concat(tokens, index + 1))
+        elif len(token) > 2:
+            short_value = token[2:]
+            if index + 1 < len(tokens) and tokens[index + 1] == "+":
+                short_value += "+<concatenated>"
+            values.append(short_value)
+    return values
+
+
+def _audit_cli_line(relative_path: str, line: str, line_number: int) -> str | None:
+    try:
+        tokens = _tokenize_command(line)
+    except ValueError:
+        if _has_credential_option_fragment(relative_path, line):
+            return f"{relative_path}:{line_number}: malformed credential command"
+        return None
+
+    values = _credential_values_from_tokens(relative_path, tokens)
+    if any(value is None for value in values):
+        return f"{relative_path}:{line_number}: malformed credential command"
+    if any(not _is_allowed_credential_value(value) for value in values if value is not None):
+        return f"{relative_path}:{line_number}: literal credential value"
+    return None
+
+
 def audit_text(relative_path: str, text: str, *, start_line: int = 1) -> list[str]:
     """Find literals only in the four audited Phase 2 credential contexts."""
     patterns = _CREDENTIAL_PATTERNS.get(relative_path, ())
     findings: list[str] = []
     for line_number, line in enumerate(text.splitlines(), start=start_line):
+        if relative_path in _CLI_CONTEXTS:
+            finding = _audit_cli_line(relative_path, line, line_number)
+            if finding:
+                findings.append(finding)
+            continue
         if any(
             not _is_allowed_credential_value(match.group("value"))
             for pattern in patterns

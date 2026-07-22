@@ -40,6 +40,64 @@ def test_phase0_mysql_password_argument_is_found_after_line_movement():
     ]
 
 
+@pytest.mark.parametrize(
+    "option_form",
+    [
+        "-p{value}",
+        "-p {value}",
+        "--password={value}",
+        "--password {value}",
+        "--dbPassword={value}",
+        "--dbPassword {value}",
+    ],
+)
+def test_phase0_cli_parser_accepts_placeholder_and_rejects_literal_for_each_option_form(
+    option_form,
+):
+    allowed = option_form.format(value='"${UPPER_ENV_NAME}"')
+    literal = option_form.format(value='"punctuated!@#[]"')
+
+    assert gate.audit_text(PLAN_CONTEXT, f'mysql -uroot {allowed} -e "SELECT 1"') == []
+    assert gate.audit_text(PLAN_CONTEXT, f'mysql -uroot {literal} -e "SELECT 1"') == [
+        f"{PLAN_CONTEXT}:1: literal credential value"
+    ]
+
+
+@pytest.mark.parametrize(
+    "option_form",
+    [
+        "--password={value}",
+        "--password {value}",
+        "--dbPassword={value}",
+        "--dbPassword {value}",
+    ],
+)
+def test_java_cli_parser_accepts_placeholder_and_rejects_literal_for_each_long_option_form(
+    option_form,
+):
+    allowed = option_form.format(value='"${UPPER_ENV_NAME}"')
+    literal = option_form.format(value='"punctuated!@#[]"')
+
+    assert gate.audit_text(JAVA_CONTEXT, f"// {allowed}") == []
+    assert gate.audit_text(JAVA_CONTEXT, f"// {literal}") == [
+        f"{JAVA_CONTEXT}:1: literal credential value"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "text"),
+    [
+        (JAVA_CONTEXT, '// --dbPassword "${UPPER_ENV_NAME}'),
+        (PLAN_CONTEXT, 'mysql -uroot -p"${UPPER_ENV_NAME}'),
+    ],
+)
+def test_malformed_cli_input_fails_closed_without_value_in_finding(relative_path, text):
+    findings = gate.audit_text(relative_path, text)
+
+    assert findings == [f"{relative_path}:1: malformed credential command"]
+    assert "UPPER_ENV_NAME" not in findings[0]
+
+
 def test_actual_schema_admin_slash_literal_comment_is_found_after_line_movement():
     literal = "punctuated!@#[]"
     text = "header\n" + f"-- 2. 插入管理员账号 (admin / {literal})\n"
