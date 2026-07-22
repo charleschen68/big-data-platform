@@ -955,10 +955,10 @@ Run:
 ```bash
 kubectl --context k3s-node apply -k infra/k8s/collectors
 kubectl --context k3s-node -n collectors run network-check --rm -i --restart=Never --image=busybox:1.36 -- \
-  sh -c 'nslookup kafka && nc -zvw5 kafka 29092 && nc -zvw5 mysql 3306 && nc -zvw5 milvus 19530'
+  sh -c 'nslookup kafka.collectors.svc.cluster.local && nc -zvw5 kafka 29092 && nslookup mysql.collectors.svc.cluster.local && nc -zvw5 mysql 3306 && nslookup milvus.collectors.svc.cluster.local && nc -zvw5 milvus 19530'
 ```
 
-Expected: 三个 DNS/端口检查全部成功。任一失败必须修复 OrbStack 容器域名访问，禁止改成硬编码 IP。
+Expected: 三个 DNS/端口检查全部成功。DNS 检查使用完整 FQDN，是因为 BusyBox `nslookup <短名称>` 在正确返回 ExternalName CNAME/A 记录后仍会继续探测 search suffix，并可能因额外 NXDOMAIN 以 1 退出；业务 TCP 仍使用真实短服务名。任一失败必须修复 OrbStack 容器域名访问，禁止改成硬编码 IP。
 
 - [ ] **Step 5: 提交**
 

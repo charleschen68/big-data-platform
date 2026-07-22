@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: collectors
+spec:
+  type: ExternalName
+  externalName: kafka.orb.local
+  ports:
+    - name: kafka
+      port: 29092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: collectors
+spec:
+  type: ExternalName
+  externalName: mysql.orb.local
+  ports:
+    - name: mysql
+      port: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: collectors
+spec:
+  type: ExternalName
+  externalName: milvus-standalone.orb.local
+  ports:
+    - name: milvus
+      port: 19530
