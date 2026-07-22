@@ -47,10 +47,16 @@ docker run --rm --platform linux/arm64 \
       " "$1"
     }
 
+    canonicalize_paths() {
+      sed "s|/work/|dataflow/requirements/|g" "$1" > "${1}.canonical"
+      mv "${1}.canonical" "$1"
+    }
+
     for name in rss market settlement retrain; do
       if [ "$1" = "refresh" ]; then
         "${temp_dir}/pip-tools/bin/pip-compile" --upgrade --rebuild --allow-unsafe --generate-hashes --strip-extras \
           --output-file "/work/${name}.txt" "/work/${name}.in"
+        canonicalize_paths "/work/${name}.txt"
       else
         "${temp_dir}/pip-tools/bin/pip" install --no-cache-dir --dry-run --require-hashes \
           --requirement "/work/${name}.txt"
@@ -58,6 +64,7 @@ docker run --rm --platform linux/arm64 \
         "${temp_dir}/pip-tools/bin/pip-compile" --quiet --allow-unsafe --generate-hashes --strip-extras --no-header \
           --constraint "/work/${name}.txt" \
           --output-file "${candidate}" "/work/${name}.in"
+        canonicalize_paths "${candidate}"
         committed_body="${temp_dir}/${name}.committed.txt"
         candidate_body="${temp_dir}/${name}.candidate.txt"
         dependency_hash_body "/work/${name}.txt" > "${committed_body}"

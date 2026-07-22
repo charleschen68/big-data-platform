@@ -133,6 +133,14 @@ def test_compile_locks_uses_the_collector_arm64_base_digest(tmp_path):
     assert "python:3.11-slim-bookworm@sha256:3df1d95e3529533d0b646640edb63a0fde8a68597c0e7c62d34c4176678bb7d1" in arguments
 
 
+def test_compile_locks_canonicalizes_container_requirement_paths():
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert "canonicalize_paths()" in source
+    assert 'sed "s|/work/|dataflow/requirements/|g" "$1" > "${1}.canonical"' in source
+    assert 'mv "${1}.canonical" "$1"' in source
+
+
 def test_compile_locks_default_hash_validates_and_compares_candidates(tmp_path):
     result, commands, requirements_copy = _run_with_executing_docker(tmp_path)
 

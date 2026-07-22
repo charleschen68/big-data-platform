@@ -17,6 +17,9 @@ for name in "${images[@]}"; do
     retrain) image="big-data/model-retrain:phase2" ;;
   esac
   docker build --platform "${PLATFORM}" -f "dataflow/docker/${name}.Dockerfile" -t "${image}" .
+  if [[ "${name}" == "settlement" || "${name}" == "retrain" ]]; then
+    docker run --rm --platform "${PLATFORM}" --entrypoint python "${image}" -c 'import pkg_resources; import pymilvus'
+  fi
   docker save "${image}" | orb -m "${VM_NAME}" -u root k3s ctr images import -
 done
 
