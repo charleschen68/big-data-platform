@@ -23,3 +23,4 @@ python-dotenv
 pytz
 
 pymilvus
+pytest==8.2.0

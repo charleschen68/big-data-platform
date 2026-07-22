@@ -1,0 +1,24 @@
+specVersion: v0.1.0
+package:
+  name: uniswap_ticks
+  version: v0.1.0
+
+protobuf:
+  files:
+    - uniswap.proto
+  importPaths:
+    - ./proto
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ./target/wasm32-unknown-unknown/release/uniswap_ticks.wasm
+
+modules:
+  - name: map_swaps
+    kind: map
+    initialBlock: 12369621
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:uniswap.types.v1.Swaps

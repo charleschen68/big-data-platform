@@ -15,9 +15,17 @@ prometheus/
 
 # 忽略所有 maven 编译输出
 **/target/
+**/global_lib/
+**/dependency-reduced-pom.xml
 
 # 忽略日志和临时数据
 *.log
+**/__pycache__/
+*.py[cod]
+.DS_Store
+.vscode/
+dataflow/current_view.png
+dataflow/error_dom.html
 /.continue/
 /.idea/
 /libs/
