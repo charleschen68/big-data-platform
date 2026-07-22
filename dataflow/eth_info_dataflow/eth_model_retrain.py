@@ -6,9 +6,12 @@ explicit environment setting and a successfully written Parquet backup.
 
 import json
 import logging
+import os
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from collector_runtime.config import env_bool, env_int, env_str
 
@@ -30,9 +33,68 @@ def load_retrain_settings() -> dict[str, object]:
 
 
 def build_training_filter(now: datetime) -> str:
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    now = now.astimezone(timezone.utc)
     six_months_ago = int((now - timedelta(days=180)).timestamp() * 1000)
     three_months_ago = int((now - timedelta(days=90)).timestamp() * 1000)
     return f"is_settled == true and pub_date >= {six_months_ago} and pub_date < {three_months_ago}"
+
+
+def _temporary_path(directory: Path, suffix: str) -> Path:
+    descriptor, path = tempfile.mkstemp(
+        prefix=".eth_model_retrain_",
+        suffix=suffix,
+        dir=directory,
+    )
+    os.close(descriptor)
+    return Path(path)
+
+
+def _fsync_file(path: Path) -> None:
+    with path.open("rb") as artifact:
+        os.fsync(artifact.fileno())
+
+
+def _fsync_directory(directory: Path) -> None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    descriptor = os.open(directory, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_backup_atomically(dataframe: object, backup_dir: Path, now: datetime) -> Path:
+    run_timestamp = now.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    backup_file = backup_dir / f"eth_data_backup_{run_timestamp}_{uuid4().hex}.parquet"
+    if backup_file.exists():
+        raise FileExistsError(f"refusing to overwrite existing backup: {backup_file}")
+
+    temporary_file = _temporary_path(backup_dir, ".parquet.tmp")
+    try:
+        dataframe.to_parquet(temporary_file, engine="pyarrow")
+        _fsync_file(temporary_file)
+        os.replace(temporary_file, backup_file)
+        _fsync_directory(backup_dir)
+    except Exception:
+        temporary_file.unlink(missing_ok=True)
+        raise
+    return backup_file
+
+
+def _publish_model_atomically(joblib: object, model: object, model_path: Path) -> None:
+    temporary_file = _temporary_path(model_path.parent, ".joblib.tmp")
+    try:
+        joblib.dump(model, temporary_file)
+        _fsync_file(temporary_file)
+        os.replace(temporary_file, model_path)
+        _fsync_directory(model_path.parent)
+    except Exception:
+        temporary_file.unlink(missing_ok=True)
+        raise
 
 
 def train_and_cleanup() -> None:
@@ -87,10 +149,7 @@ def train_and_cleanup() -> None:
         # A backup must be durable before any deletion is even considered.
         model_path.parent.mkdir(parents=True, exist_ok=True)
         backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_file = backup_dir / (
-            f"eth_data_backup_{six_months_ago:%Y%m%d}_{three_months_ago:%Y%m%d}.parquet"
-        )
-        pd.DataFrame(records).to_parquet(backup_file, engine="pyarrow")
+        backup_file = _write_backup_atomically(pd.DataFrame(records), backup_dir, now)
         logger.info("Backed up %d records to %s", len(records), backup_file)
 
         features = np.array(
@@ -107,7 +166,7 @@ def train_and_cleanup() -> None:
             tree_method="hist",
         )
         model.fit(features, labels)
-        joblib.dump(model, model_path)
+        _publish_model_atomically(joblib, model, model_path)
         logger.info("Saved trained model to %s", model_path)
 
         delete_after_backup = settings["delete_after_backup"]
