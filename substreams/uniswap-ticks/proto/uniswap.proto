@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package uniswap.types.v1;
+
+message Swaps {
+    repeated Swap swaps = 1;
+}
+
+message Swap {
+    string tx_hash = 1;
+    uint64 block_number = 2;
+    uint64 timestamp = 3;
+    string pool_address = 4;
+    string sender = 5;
+    string recipient = 6;
+    string amount0 = 7;
+    string amount1 = 8;
+    string sqrt_price_x96 = 9;
+    string liquidity = 10;
+    int32 tick = 11;
+}
