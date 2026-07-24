@@ -1,0 +1,36 @@
+# ClickHouse Altinity Operator Helm values
+clickhouse:
+  instance:
+    replicas: 1
+    image: clickhouse/clickhouse-server:24.3-alpine
+    resources:
+      requests:
+        cpu: 500m
+        memory: 4Gi
+      limits:
+        cpu: 1000m
+        memory: 4Gi
+    clickhouseConfig:
+      max_connections: 100
+      keep_alive_timeout: 300
+    volumeClaimTemplates:
+    - name: data
+      storage: 20Gi
+      storageClassName: local-path
+      mountPath: /var/lib/clickhouse
+
+# Service 配置
+service:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8123
+    targetPort: 8123
+  - name: tcp
+    port: 9000
+    targetPort: 9000
+
+# 外部访问
+externalAccess:
+  enabled: true
+  type: ClusterIP
