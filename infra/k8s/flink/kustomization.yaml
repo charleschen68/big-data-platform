@@ -4,3 +4,7 @@ namespace: flink
 resources:
   - operator-helm.yaml
   - eth-sentiment-trading-job.yaml
+  - eth-sentiment-analysis-job.yaml
+  - kafka2milvus.yaml
+  - employee-message-processor.yaml
+  - realtime-riskcontrol-embedding-job.yaml
