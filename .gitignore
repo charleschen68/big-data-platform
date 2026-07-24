@@ -21,3 +21,4 @@ prometheus/
 /.continue/
 /.idea/
 /libs/
+dependency-reduced-pom.xml
