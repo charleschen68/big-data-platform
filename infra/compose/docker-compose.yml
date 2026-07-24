@@ -178,7 +178,7 @@ services:
       - TZ=Asia/Shanghai # <-- 新增：上海时间
     depends_on:
       - flink-jobmanager
-      - kafka
+      # - kafka
     volumes:
       - ../../libs/jdk:/opt/jdk
       - ../../data/streampark_h2:/root/streampark/h2-data
