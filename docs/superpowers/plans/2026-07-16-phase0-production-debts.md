@@ -645,7 +645,7 @@ CREATE TABLE IF NOT EXISTS processed_signals (
 应用到运行中的 MySQL：
 
 ```bash
-docker compose exec -T mysql mysql -uroot -pstreampark streampark -e "CREATE TABLE IF NOT EXISTS processed_signals (signal_id VARCHAR(255) NOT NULL PRIMARY KEY, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP); SHOW TABLES LIKE 'processed_signals';"
+docker compose exec -T mysql mysql -uroot -p"${MYSQL_PASSWORD}" streampark -e "CREATE TABLE IF NOT EXISTS processed_signals (signal_id VARCHAR(255) NOT NULL PRIMARY KEY, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP); SHOW TABLES LIKE 'processed_signals';"
 ```
 
 预期输出含 `processed_signals`。
@@ -814,7 +814,7 @@ grep -n 'streampark' docker-compose.yml
 
 ```bash
 docker compose config > /dev/null && echo "compose 配置有效"
-docker compose up -d mysql && docker compose exec -T mysql mysql -uroot -p"$(grep MYSQL_ROOT_PASSWORD .env | cut -d= -f2)" -e "SELECT 1"
+set -a && . ./.env && set +a && docker compose up -d mysql && docker compose exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1"
 mvn -q clean package -DskipTests -pl common -am
 grep -rn '"streampark"' common/src datastream --include='*.java' || echo "Java 源码已无硬编码密码"
 ```

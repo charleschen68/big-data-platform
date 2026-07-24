@@ -15,7 +15,7 @@ import static org.apache.flink.table.api.Expressions.$;
 //--kafkaUrl kafka:29092
 //--dbUrl jdbc:mysql://mysql:3306/streampark
 //--dbUsername root
-//--dbPassword streampark
+//--dbPassword "${MYSQL_PASSWORD}"
 //--sourceTopic topic1
 //--sinkTopic topic2
 //--sinkTablename employee_mysql_sink

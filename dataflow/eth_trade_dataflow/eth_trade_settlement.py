@@ -1,9 +1,11 @@
-import os
 import json
 import logging
+
 from kafka import KafkaConsumer
 from pymilvus import connections, Collection
 from dotenv import load_dotenv
+from collector_runtime.config import env_int, env_str
+from collector_runtime.health import WorkloadHealth, start_health_server
 
 # 日志配置
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -11,15 +13,30 @@ logger = logging.getLogger("SettlementWorker")
 
 load_dotenv()
 
+
+def load_settlement_settings() -> dict[str, object]:
+    return {
+        "milvus_host": env_str("MILVUS_HOST", "milvus"),
+        "milvus_port": env_int("MILVUS_PORT", 19530),
+        "collection": env_str("MILVUS_COLLECTION", "eth_sentiment_analysis"),
+        "kafka_bootstrap": env_str("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092"),
+        "topic": env_str("TRADE_SIGNALS_TOPIC", "topic_trade_signals"),
+        "health_port": env_int("HEALTH_PORT", 8080),
+        "stale_after": env_int("HEALTH_STALE_AFTER_SECONDS", 30),
+    }
+
+
 class MilvusSettlementWorker:
-    def __init__(self):
+    def __init__(self, settings: dict[str, object], health: WorkloadHealth):
+        self.health = health
+
         # 1. 连接 Milvus
-        host = os.getenv("MILVUS_HOST", "milvus-standalone")
-        port = os.getenv("MILVUS_PORT", "19530")
+        host = settings["milvus_host"]
+        port = settings["milvus_port"]
         logger.info(f"Connecting to Milvus at {host}:{port}...")
         connections.connect("default", host=host, port=port)
 
-        self.collection_name = "eth_sentiment_analysis"
+        self.collection_name = settings["collection"]
         self.collection = Collection(self.collection_name)
         # 确保集合加载到内存中以便查询
         self.collection.load()
@@ -32,8 +49,8 @@ class MilvusSettlementWorker:
         ]
 
         # 2. 初始化 Kafka 消费者
-        kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
-        self.topic = "topic_trade_signals"
+        kafka_bootstrap = settings["kafka_bootstrap"]
+        self.topic = settings["topic"]
 
         logger.info(f"Connecting to Kafka: {kafka_bootstrap}, listening on topic: {self.topic}")
         self.consumer = KafkaConsumer(
@@ -43,6 +60,7 @@ class MilvusSettlementWorker:
             group_id='milvus_settlement_group',
             auto_offset_reset='latest'
         )
+        self.health.mark_ready()
 
     def process_sell_signal(self, signal):
         """
@@ -103,21 +121,22 @@ class MilvusSettlementWorker:
     def run_forever(self):
         logger.info("Listening for trade signals...")
         try:
-            for message in self.consumer:
-                signal = message.value
-                action = signal.get("action")
-
-                # 只处理 SELL 动作进行结算
-                if action == "SELL":
-                    self.process_sell_signal(signal)
-                else:
-                    # BUY 或 OBSERVE 信号忽略，因为不需要在此节点处理
-                    pass
+            while True:
+                batches = self.consumer.poll(timeout_ms=1000, max_records=100)
+                self.health.heartbeat()
+                for messages in batches.values():
+                    for message in messages:
+                        signal = message.value
+                        if signal.get("action") == "SELL":
+                            self.process_sell_signal(signal)
         except KeyboardInterrupt:
             logger.info("Shutting down settlement worker...")
         finally:
             self.consumer.close()
 
 if __name__ == "__main__":
-    worker = MilvusSettlementWorker()
+    settings = load_settlement_settings()
+    health = WorkloadHealth(settings["stale_after"])
+    start_health_server(health, settings["health_port"])
+    worker = MilvusSettlementWorker(settings, health)
     worker.run_forever()

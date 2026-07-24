@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+REQUIREMENTS_DIR="${REPO_ROOT}/dataflow/requirements"
+PYTHON_IMAGE="python:3.11-slim-bookworm@sha256:3df1d95e3529533d0b646640edb63a0fde8a68597c0e7c62d34c4176678bb7d1"
+
+case "${1:-}" in
+  "")
+    MODE="default"
+    ;;
+  --refresh)
+    MODE="refresh"
+    ;;
+  *)
+    echo "usage: $0 [--refresh]" >&2
+    exit 64
+    ;;
+esac
+
+MOUNT="type=bind,src=${REQUIREMENTS_DIR},dst=/work"
+if [ "${MODE}" = "default" ]; then
+  MOUNT+=",readonly"
+fi
+
+docker run --rm --platform linux/arm64 \
+  --env HOME=/tmp \
+  --env PIP_TOOLS_CACHE_DIR=/tmp/pip-tools-cache \
+  --mount "${MOUNT}" \
+  --workdir /work \
+  --user "$(id -u):$(id -g)" \
+  "${PYTHON_IMAGE}" \
+  sh -ec '
+    temp_dir="$(mktemp -d /tmp/compile-locks.XXXXXX)"
+    trap "rm -rf \"${temp_dir}\"" EXIT
+    python -m venv "${temp_dir}/pip-tools"
+    "${temp_dir}/pip-tools/bin/pip" install --no-cache-dir --require-hashes --requirement /work/bootstrap.txt
+
+    dependency_hash_body() {
+      awk "
+        BEGIN { header = 1 }
+        header && (/^#/ || /^[[:space:]]*$/) { next }
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*$/ { next }
+        { header = 0; print }
+      " "$1"
+    }
+
+    canonicalize_paths() {
+      sed "s|/work/|dataflow/requirements/|g" "$1" > "${1}.canonical"
+      mv "${1}.canonical" "$1"
+    }
+
+    for name in rss market settlement retrain; do
+      if [ "$1" = "refresh" ]; then
+        "${temp_dir}/pip-tools/bin/pip-compile" --upgrade --rebuild --allow-unsafe --generate-hashes --strip-extras \
+          --output-file "/work/${name}.txt" "/work/${name}.in"
+        canonicalize_paths "/work/${name}.txt"
+      else
+        "${temp_dir}/pip-tools/bin/pip" install --no-cache-dir --dry-run --require-hashes \
+          --requirement "/work/${name}.txt"
+        candidate="${temp_dir}/${name}.txt"
+        "${temp_dir}/pip-tools/bin/pip-compile" --quiet --allow-unsafe --generate-hashes --strip-extras --no-header \
+          --constraint "/work/${name}.txt" \
+          --output-file "${candidate}" "/work/${name}.in"
+        canonicalize_paths "${candidate}"
+        committed_body="${temp_dir}/${name}.committed.txt"
+        candidate_body="${temp_dir}/${name}.candidate.txt"
+        dependency_hash_body "/work/${name}.txt" > "${committed_body}"
+        dependency_hash_body "${candidate}" > "${candidate_body}"
+        if ! cmp -s "${committed_body}" "${candidate_body}"; then
+          echo "${name}: lock graph or hashes differ from the committed lock" >&2
+          diff -u "${committed_body}" "${candidate_body}" >&2 || true
+          exit 1
+        fi
+      fi
+    done
+  ' sh "${MODE}"

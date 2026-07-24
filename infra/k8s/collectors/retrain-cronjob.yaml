@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-retrain
+  namespace: collectors
+spec:
+  schedule: "0 3 * * 0"
+  timeZone: Asia/Shanghai
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: model-retrain
+              image: big-data/model-retrain:phase2
+              imagePullPolicy: Never
+              envFrom:
+                - configMapRef:
+                    name: collector-config
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                readOnlyRootFilesystem: true
+              volumeMounts:
+                - name: artifacts
+                  mountPath: /artifacts
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: artifacts
+              persistentVolumeClaim:
+                claimName: collector-artifacts
+            - name: tmp
+              emptyDir: {}
