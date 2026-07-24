@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus
+  namespace: data
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+  template:
+    metadata:
+      labels:
+        app: milvus
+    spec:
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.4.15
+        imagePullPolicy: IfNotPresent
+        command: ["milvus", "run", "standalone"]
+        ports:
+        - containerPort: 19530
+          name: milvus
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: MINIO_ADDRESS
+          value: minio.data.svc.cluster.local:9000
+        - name: MINIO_ACCESS_KEY
+          value: minioadmin
+        - name: MINIO_SECRET_KEY
+          value: minioadmin
+        - name: COMMON_STORAGETYPE
+          value: minio
+        - name: ETCD_USE_EMBED
+          value: "true"
+        - name: ETCD_DATA_DIR
+          value: /var/lib/milvus/etcd
+        - name: TZ
+          value: Asia/Shanghai
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+        - name: milvus-logs
+          mountPath: /milvus/logs
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 4Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+      volumes:
+      - name: milvus-data
+        persistentVolumeClaim:
+          claimName: milvus-pvc
+      - name: milvus-logs
+        persistentVolumeClaim:
+          claimName: milvus-logs-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: milvus-pvc
+  namespace: data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: milvus-logs-pvc
+  namespace: data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: data
+spec:
+  type: ClusterIP
+  ports:
+  - name: milvus
+    port: 19530
+    targetPort: 19530
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+  selector:
+    app: milvus

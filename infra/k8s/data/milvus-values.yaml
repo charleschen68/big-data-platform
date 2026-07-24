@@ -1,0 +1,26 @@
+# Milvus Helm values
+etcd:
+  use: embedded
+
+minio:
+  address: minio.data.svc.cluster.local:9000
+  accessKey: minioadmin
+  secretKey: minioadmin
+  use: existing
+
+standalone:
+  replicas: 1
+  image: milvusdb/milvus:v2.4.15
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+  volume:
+    type: persistentVolumeClaim
+    persistentVolumeClaim:
+      claimName: milvus-pvc
+      storage: 20Gi
+      storageClassName: local-path
