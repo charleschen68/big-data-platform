@@ -3,49 +3,49 @@ version: '3.8'
 
 services:
   # --- 1. Apache Kafka (KRaft模式) ---
-  kafka:
-    image: apache/kafka:3.7.0
-    container_name: kafka
-    restart: always
-    ports:
-      - "9092:9092"
-      - "9094:9094"
-    networks:
-      - big-data-network
-    environment:
-      PATH: "/opt/kafka/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      CLUSTER_ID: "MKU3OEVBNTcwNTJDRkFDMz"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_LOG_FLUSH_INTERVAL_MS: 10000
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-      KAFKA_HEAP_OPTS: "-Xmx1G -Xms1G"
-      TZ: Asia/Shanghai
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 2048M
-    volumes:
-      - ../../data/kafka:/var/lib/kafka/data
+  # kafka:
+  #   image: apache/kafka:3.7.0
+  #   container_name: kafka
+  #   restart: always
+  #   ports:
+  #     - "9092:9092"
+  #     - "9094:9094"
+  #   networks:
+  #     - big-data-network
+  #   environment:
+  #     PATH: "/opt/kafka/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_PROCESS_ROLES: broker,controller
+  #     CLUSTER_ID: "MKU3OEVBNTcwNTJDRkFDMz"
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_LOG_FLUSH_INTERVAL_MS: 10000
+  #     KAFKA_LOG_DIRS: /var/lib/kafka/data
+  #     KAFKA_HEAP_OPTS: "-Xmx1G -Xms1G"
+  #     TZ: Asia/Shanghai
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.50'
+  #         memory: 2048M
+  #   volumes:
+  #     - ../../data/kafka:/var/lib/kafka/data
 
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.9.0
-    container_name: kafka-exporter
-    command: ["--kafka.server=kafka:29092"]
-    networks:
-      - big-data-network
-    ports:
-      - "9308:9308"
-    depends_on:
-      - kafka
+  # kafka-exporter:
+  #   image: danielqsj/kafka-exporter:v1.9.0
+  #   container_name: kafka-exporter
+  #   command: ["--kafka.server=kafka:29092"]
+  #   networks:
+  #     - big-data-network
+  #   ports:
+  #     - "9308:9308"
+  #   depends_on:
+  #     - kafka
 
   # --- 3. Flink JobManager ---
   flink-jobmanager:
@@ -140,24 +140,24 @@ services:
           memory: 10240M
 
   # --- 5. MySQL ---
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    platform: linux/arm64
-    networks:
-      - big-data-network
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置}
-      MYSQL_DATABASE: streampark
-      TZ: Asia/Shanghai # <-- 新增：上海时间
-    volumes:
-      - ../../data/mysql:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    deploy:
-      resources:
-        limits:
-          memory: 1024M
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: mysql
+  #   platform: linux/arm64
+  #   networks:
+  #     - big-data-network
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置}
+  #     MYSQL_DATABASE: streampark
+  #     TZ: Asia/Shanghai # <-- 新增：上海时间
+  #   volumes:
+  #     - ../../data/mysql:/var/lib/mysql
+  #   ports:
+  #     - "3306:3306"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1024M
 
   # --- 6. StreamPark ---
   streampark:
@@ -192,20 +192,20 @@ services:
   #    command: tail -f /dev/null
 
   # --- 7. AI 基础设施 (Milvus) ---
-  etcd:
-    container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.10
-    networks:
-      - big-data-network
-    environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
-      - TZ=Asia/Shanghai # <-- 新增：上海时间
-    volumes:
-      - ../../data/etcd:/etcd
-    command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+  # etcd:
+  #   container_name: milvus-etcd
+  #   image: quay.io/coreos/etcd:v3.5.10
+  #   networks:
+  #     - big-data-network
+  #   environment:
+  #     - ETCD_AUTO_COMPACTION_MODE=revision
+  #     - ETCD_AUTO_COMPACTION_RETENTION=1000
+  #     - ETCD_QUOTA_BACKEND_BYTES=4294967296
+  #     - ETCD_SNAPSHOT_COUNT=50000
+  #     - TZ=Asia/Shanghai # <-- 新增：上海时间
+  #   volumes:
+  #     - ../../data/etcd:/etcd
+  #   command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
 
   minio:
     container_name: milvus-minio
@@ -223,46 +223,46 @@ services:
       - ../../data/minio:/data
     command: server /data --console-address ":9001"
 
-  milvus:
-    container_name: milvus-standalone
-    image: milvusdb/milvus:v2.4.15
-    command: [ "milvus", "run", "standalone" ]
-    security_opt:
-      - seccomp:unconfined
-    networks:
-      - big-data-network
-    environment:
-      ETCD_ENDPOINTS: milvus-etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-      COMMON_STORAGETYPE: minio
-      TZ: Asia/Shanghai # <-- 原本已有，保持不变
-    volumes:
-      - ../../data/milvus:/var/lib/milvus
-      - ../../data/logs/milvus:/milvus/logs
-    ports:
-      - "19530:19530"
-      - "9091:9091"
-    depends_on:
-      - etcd
-      - minio
-    deploy:
-      resources:
-        limits:
-          cpus: '8'
-          memory: 16G
+  # milvus:
+  #   container_name: milvus-standalone
+  #   image: milvusdb/milvus:v2.4.15
+  #   command: [ "milvus", "run", "standalone" ]
+  #   security_opt:
+  #     - seccomp:unconfined
+  #   networks:
+  #     - big-data-network
+  #   environment:
+  #     ETCD_ENDPOINTS: milvus-etcd:2379
+  #     MINIO_ADDRESS: milvus-minio:9000
+  #     COMMON_STORAGETYPE: minio
+  #     TZ: Asia/Shanghai # <-- 原本已有，保持不变
+  #   volumes:
+  #     - ../../data/milvus:/var/lib/milvus
+  #     - ../../data/logs/milvus:/milvus/logs
+  #   ports:
+  #     - "19530:19530"
+  #     - "9091:9091"
+  #   depends_on:
+  #     - etcd
+  #     - minio
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '8'
+  #         memory: 16G
 
-  attu:
-    container_name: milvus-attu
-    image: zilliz/attu:latest
-    networks:
-      - big-data-network
-    environment:
-      MILVUS_URL: milvus-standalone:19530
-      TZ: Asia/Shanghai # <-- 新增：上海时间
-    ports:
-      - "8000:3000"
-    depends_on:
-      - milvus
+  # attu:
+  #   container_name: milvus-attu
+  #   image: zilliz/attu:latest
+  #   networks:
+  #     - big-data-network
+  #   environment:
+  #     MILVUS_URL: milvus-standalone:19530
+  #     TZ: Asia/Shanghai # <-- 新增：上海时间
+  #   ports:
+  #     - "8000:3000"
+  #   depends_on:
+  #     - milvus
 
   # --- 可视化监测 ---
   cadvisor:
@@ -336,19 +336,19 @@ services:
 #      - TZ=Asia/Shanghai
 
   # --- 9. ClickHouse ---
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.3-alpine
-    container_name: clickhouse
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    networks:
-      - big-data-network
-    volumes:
-      - ../../data/clickhouse:/var/lib/clickhouse
-      - ../../data/clickhouse_logs:/var/log/clickhouse-server
-    environment:
-      - TZ=Asia/Shanghai
+  # clickhouse:
+  #   image: clickhouse/clickhouse-server:24.3-alpine
+  #   container_name: clickhouse
+  #   ports:
+  #     - "8123:8123"
+  #     - "9000:9000"
+  #   networks:
+  #     - big-data-network
+  #   volumes:
+  #     - ../../data/clickhouse:/var/lib/clickhouse
+  #     - ../../data/clickhouse_logs:/var/log/clickhouse-server
+  #   environment:
+  #     - TZ=Asia/Shanghai
 
 volumes:
   kafka_data:

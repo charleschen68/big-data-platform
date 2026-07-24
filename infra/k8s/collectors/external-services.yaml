@@ -5,10 +5,10 @@ metadata:
   namespace: collectors
 spec:
   type: ExternalName
-  externalName: kafka.orb.local
+  externalName: kafka-kafka-bootstrap.data.svc.cluster.local
   ports:
-    - name: kafka
-      port: 29092
+  - name: kafka
+    port: 9092
 ---
 apiVersion: v1
 kind: Service
@@ -17,10 +17,10 @@ metadata:
   namespace: collectors
 spec:
   type: ExternalName
-  externalName: mysql.orb.local
+  externalName: mysql.data.svc.cluster.local
   ports:
-    - name: mysql
-      port: 3306
+  - name: mysql
+    port: 3306
 ---
 apiVersion: v1
 kind: Service
@@ -29,7 +29,19 @@ metadata:
   namespace: collectors
 spec:
   type: ExternalName
-  externalName: milvus-standalone.orb.local
+  externalName: milvus.data.svc.cluster.local
   ports:
-    - name: milvus
-      port: 19530
+  - name: milvus
+    port: 19530
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: collectors
+spec:
+  type: ExternalName
+  externalName: clickhouse.data.svc.cluster.local
+  ports:
+  - name: clickhouse
+    port: 9000
