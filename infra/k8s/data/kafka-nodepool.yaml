@@ -1,0 +1,17 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: kafka
+  namespace: data
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  clusterName: kafka
+  replicas: 1
+  roles:
+  - controller
+  - broker
+  storage:
+    type: persistent-claim
+    size: 20Gi
+    storageClassName: local-path
